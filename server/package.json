@@ -1,0 +1,140 @@
+"dependencies": {
+  "cors": "^2.8.5",
+  "dotenv": "^16.0.0",
+  "express": "^4.18.0",
+  "nodemailer": "^6.9.0",
+  "@supabase/supabase-js": "^2.39.0"
+}
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Save } from "lucide-react";
+
+const EMAIL_SERVER = import.meta.env.VITE_EMAIL_SERVER_URL || 'http://localhost:3001';
+
+export default function EmailSettings() {
+  const [config, setConfig] = useState({
+    email_provider: 'gmail',
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_pass: '',
+    sendgrid_api_key: '',
+    email_from_name: 'COMFORT Laundry',
+    email_from_address: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${EMAIL_SERVER}/config`)
+      .then(r => r.json())
+      .then(data => { setConfig(prev => ({ ...prev, ...data })); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${EMAIL_SERVER}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success('Email settings saved successfully');
+    } catch (err) {
+      toast.error('Failed to save settings');
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
+
+  return (
+    <div className="p-6 max-w-2xl space-y-6">
+      <h1 className="text-2xl font-bold">Email Settings</h1>
+
+      <Card>
+        <CardHeader><CardTitle>Email Provider</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Provider</Label>
+            <Select value={config.email_provider} onValueChange={v => setConfig(c => ({ ...c, email_provider: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gmail">Gmail (SMTP)</SelectItem>
+                <SelectItem value="sendgrid">SendGrid</SelectItem>
+                <SelectItem value="smtp">Custom SMTP</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>From Name</Label>
+              <Input value={config.email_from_name} onChange={e => setConfig(c => ({ ...c, email_from_name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>From Email Address</Label>
+              <Input value={config.email_from_address} onChange={e => setConfig(c => ({ ...c, email_from_address: e.target.value }))} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {config.email_provider === 'sendgrid' && (
+        <Card>
+          <CardHeader><CardTitle>SendGrid</CardTitle></CardHeader>
+          <CardContent>
+            <Label>API Key</Label>
+            <Input
+              placeholder="SG.xxxxxxxxx"
+              value={config.sendgrid_api_key}
+              onChange={e => setConfig(c => ({ ...c, sendgrid_api_key: e.target.value }))}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {(config.email_provider === 'gmail' || config.email_provider === 'smtp') && (
+        <Card>
+          <CardHeader><CardTitle>SMTP Settings</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>SMTP Host</Label>
+                <Input value={config.smtp_host} onChange={e => setConfig(c => ({ ...c, smtp_host: e.target.value }))} />
+              </div>
+              <div>
+                <Label>SMTP Port</Label>
+                <Input value={config.smtp_port} onChange={e => setConfig(c => ({ ...c, smtp_port: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <Label>Email / Username</Label>
+              <Input value={config.smtp_user} onChange={e => setConfig(c => ({ ...c, smtp_user: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Password / App Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter new password to change"
+                onChange={e => setConfig(c => ({ ...c, smtp_pass: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">For Gmail, use a 16-digit App Password (not your Gmail login password)</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Settings'}
+      </Button>
+    </div>
+  );
+}

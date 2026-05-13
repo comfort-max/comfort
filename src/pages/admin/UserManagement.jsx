@@ -1,0 +1,486 @@
+import React, { useState, useMemo, useEffect } from "react";
+import { db, sendAdminInvite } from "@/services/SupabaseService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import PageHeader from "@/components/shared/PageHeader";
+import DataTable from "@/components/shared/DataTable";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Pencil, UserPlus, Shield } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/AuthContext";
+import RolePermissionMatrix from "@/components/admin/RolePermissionMatrix";
+import { normalizePermissions } from "@/lib/permissions";
+import { defaultNewRolePermissions } from "@/lib/permissions";
+import { sortByLocaleKey, sortStringsForDisplay } from "@/lib/utils";
+import { roleNameFromAppRoleRow } from "@/lib/appRoles";
+import { usePermissions } from "@/hooks/usePermissions";
+
+export default function UserManagement() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { can } = usePermissions();
+  const canInviteUsers = can("admin_users", "invite");
+  const canEditUsers = can("admin_users", "edit");
+  const canEditRolesMatrix = can("admin_roles", "edit");
+  const [showInvite, setShowInvite] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showRolePerms, setShowRolePerms] = useState(false);
+  const [permRoleId, setPermRoleId] = useState(null);
+  const [permState, setPermState] = useState(() => defaultNewRolePermissions());
+
+  const [inviteTab, setInviteTab] = useState("employee");
+  const [inviteForm, setInviteForm] = useState({
+    employee_id: "",
+    email: "",
+    full_name: "",
+    role_name: "",
+  });
+
+  const [editForm, setEditForm] = useState({
+    id: "",
+    full_name: "",
+    email: "",
+    role: "",
+    phone: "",
+  });
+
+  const { data: users = [], isLoading } = useQuery({ queryKey: ["users"], queryFn: () => db.profiles.list() });
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-active"],
+    queryFn: () => db.Employee.filter({ status: "active" }),
+  });
+  const {
+    data: appRoles = [],
+    isError: appRolesError,
+    error: appRolesQueryError,
+    refetch: refetchAppRoles,
+  } = useQuery({
+    queryKey: ["app-roles"],
+    queryFn: () => db.AppRole.list("name"),
+  });
+
+  const { data: companySettings = [] } = useQuery({
+    queryKey: ["company-settings-users"],
+    queryFn: () => db.CompanySettings.list(),
+    staleTime: 60 * 1000,
+  });
+  const companyName = companySettings[0]?.company_name || "COMFORT";
+  const senderName = companySettings[0]?.email_from_name || companyName;
+
+  const profileRoleNames = useMemo(() => {
+    const s = new Set();
+    for (const u of users) {
+      const r = String(u?.role ?? "").trim();
+      if (r) s.add(r);
+    }
+    return s;
+  }, [users]);
+
+  const roleOptions = useMemo(() => {
+    const names = new Set();
+    for (const row of appRoles) {
+      const n = roleNameFromAppRoleRow(row);
+      if (n) names.add(n);
+    }
+    for (const n of profileRoleNames) names.add(n);
+    return sortStringsForDisplay([...names]);
+  }, [appRoles, profileRoleNames]);
+
+  const inviteRoleDefault = useMemo(() => {
+    if (!roleOptions.length) return "";
+    return roleOptions[0];
+  }, [roleOptions]);
+
+  useEffect(() => {
+    if (showInvite && !inviteForm.role_name) {
+      setInviteForm((f) => ({ ...f, role_name: inviteRoleDefault }));
+    }
+  }, [showInvite, inviteRoleDefault, inviteForm.role_name]);
+
+  useEffect(() => {
+    if (!appRolesError) return;
+    toast.error(appRolesQueryError?.message || "Could not load roles from the database.");
+  }, [appRolesError, appRolesQueryError]);
+
+  const selectedPermRole = useMemo(() => appRoles.find((r) => r.id === permRoleId), [appRoles, permRoleId]);
+
+  const employeesSorted = useMemo(() => sortByLocaleKey(employees), [employees]);
+
+  useEffect(() => {
+    if (!showRolePerms || !selectedPermRole) return;
+    setPermState(normalizePermissions(selectedPermRole.permissions));
+  }, [showRolePerms, selectedPermRole]);
+
+  const inviteMutation = useMutation({
+    mutationFn: async () => {
+      const email = inviteForm.email.trim().toLowerCase();
+      if (!email) throw new Error("Email is required");
+      const role = inviteForm.role_name || inviteRoleDefault;
+      if (!role) throw new Error("Add at least one role under Administration → Role Management before inviting users.");
+      await sendAdminInvite({
+        email,
+        role_name: role,
+        invited_by: user?.full_name || user?.email || "",
+        employee_id: inviteTab === "employee" && inviteForm.employee_id ? inviteForm.employee_id : null,
+        invited_name: inviteForm.full_name?.trim() || null,
+        company_name: companyName,
+        sender_name: senderName,
+      });
+    },
+    onSuccess: () => {
+      setShowInvite(false);
+      setInviteForm({ employee_id: "", email: "", full_name: "", role_name: inviteRoleDefault });
+      toast.success("Invitation email sent");
+      qc.invalidateQueries({ queryKey: ["invitations"] });
+    },
+    onError: (err) =>
+      toast.error(
+        err?.message ||
+          "Invite failed. On Vercel, add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, EMAIL_USER, and EMAIL_PASS (see the notice on this page), then redeploy."
+      ),
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (data) => {
+      const updates = {
+        full_name: data.full_name?.trim() || null,
+        role: data.role || "user",
+      };
+      if (Object.prototype.hasOwnProperty.call(data, "phone")) {
+        updates.phone = data.phone?.trim() || null;
+      }
+      return db.profiles.update(data.id, updates);
+    },
+    onSuccess: () => {
+      setShowEdit(false);
+      toast.success("User profile updated");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Failed to update user");
+    },
+  });
+
+  const saveRolePermissionsMutation = useMutation({
+    mutationFn: async () => {
+      if (!permRoleId) throw new Error("No role selected");
+      if (String(roleNameFromAppRoleRow(selectedPermRole)).toLowerCase() === "admin") {
+        throw new Error("Admin always has full access");
+      }
+      return db.AppRole.update(permRoleId, { permissions: permState });
+    },
+    onSuccess: () => {
+      toast.success("Role permissions saved");
+      setShowRolePerms(false);
+      qc.invalidateQueries({ queryKey: ["app-roles"] });
+    },
+    onError: (e) => toast.error(e?.message || "Save failed"),
+  });
+
+  const openRolePermissions = (roleName) => {
+    const match = appRoles.find(
+      (r) => String(roleNameFromAppRoleRow(r)).toLowerCase() === String(roleName || "").toLowerCase()
+    );
+    if (!match) {
+      toast.error("Add this role under Role Management first, or assign an existing role to the user.");
+      return;
+    }
+    if (String(roleNameFromAppRoleRow(match)).toLowerCase() === "admin") {
+      toast.info("Admin has unrestricted access.");
+      return;
+    }
+    setPermRoleId(match.id);
+    setShowRolePerms(true);
+  };
+
+  const columns = [
+    { key: "name", header: "Name", accessor: "full_name", sortable: true },
+    { key: "email", header: "Email", accessor: "email", sortable: true },
+    {
+      key: "role",
+      header: "Role",
+      accessor: "role",
+      render: (r) => <span className="capitalize">{r.role || "-"}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (r) => (
+        <div className="flex justify-end gap-1">
+          {canEditRolesMatrix && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Role permissions"
+            onClick={() => openRolePermissions(r.role)}
+          >
+            <Shield className="h-4 w-4" />
+          </Button>
+          )}
+          {canEditUsers && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => {
+              setEditForm({
+                id: r.id,
+                full_name: r.full_name || "",
+                email: r.email || "",
+                role: r.role || "user",
+                phone: r.phone || "",
+              });
+              setShowEdit(true);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <PageHeader title="User Management" subtitle="Invite users, assign roles, and edit permissions per role" permissionResource="admin_users">
+        {canInviteUsers && (
+        <Button size="sm" className="gap-1" onClick={() => setShowInvite(true)}>
+          <UserPlus className="w-4 h-4" /> Invite user
+        </Button>
+        )}
+      </PageHeader>
+      <div className="mb-4 p-3 bg-muted/60 border rounded-lg text-sm text-muted-foreground space-y-2">
+        <p>
+          <strong className="text-foreground">Production (Vercel — no Supabase CLI needed):</strong> in the Vercel project →{" "}
+          <span className="font-medium text-foreground">Settings → Environment Variables</span>, add these three (copy values
+          from Supabase Dashboard → Project Settings → API):{" "}
+          <code className="text-xs">SUPABASE_URL</code> (same as <code className="text-xs">VITE_SUPABASE_URL</code>),{" "}
+          <code className="text-xs">SUPABASE_ANON_KEY</code> (same as <code className="text-xs">VITE_SUPABASE_ANON_KEY</code>), and{" "}
+          <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code> (service role — server only, never{" "}
+          <code className="text-xs">VITE_*</code>). Also add SMTP: <code className="text-xs">EMAIL_USER</code>,{" "}
+          <code className="text-xs">EMAIL_PASS</code>, optional <code className="text-xs">EMAIL_FROM_ADDRESS</code>. Then{" "}
+          <strong className="text-foreground">redeploy</strong> the site. Invites call <code className="text-xs">/api/admin/invite</code> on
+          Vercel.
+        </p>
+        <p>
+          Locally run <code className="text-xs">npm run dev:full</code> so <code className="text-xs">/api/admin/invite</code> is proxied to
+          the email server (e.g. port 3001) with the same vars in a root <code className="text-xs">.env</code>.
+        </p>
+        <p>
+          <strong className="text-foreground">Optional (advanced):</strong> Supabase Edge Function <code className="text-xs">admin-invite</code>{" "}
+          avoids storing the service role on Vercel; set <code className="text-xs">VITE_INVITE_USE_SUPABASE_EDGE=true</code> in the
+          front-end env only after that function is deployed (e.g. via CI or someone with the CLI).
+        </p>
+      </div>
+      <DataTable columns={columns} data={users} loading={isLoading} searchPlaceholder="Search users..." />
+
+      <Dialog open={showInvite} onOpenChange={setShowInvite}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite user</DialogTitle>
+          </DialogHeader>
+          <Tabs value={inviteTab} onValueChange={setInviteTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="employee">From employees</TabsTrigger>
+              <TabsTrigger value="manual">Not in employees</TabsTrigger>
+            </TabsList>
+            <TabsContent value="employee" className="grid gap-3 pt-3">
+              <div>
+                <Label>Employee</Label>
+                <Select
+                  value={inviteForm.employee_id || "__none__"}
+                  onValueChange={(id) => {
+                    if (id === "__none__") {
+                      setInviteForm((f) => ({ ...f, employee_id: "", email: f.email }));
+                      return;
+                    }
+                    const e = employees.find((x) => x.id === id);
+                    setInviteForm((f) => ({
+                      ...f,
+                      employee_id: id,
+                      email: e?.email || f.email,
+                      full_name: e?.name || f.full_name,
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Choose…</SelectItem>
+                    {employeesSorted.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+            <TabsContent value="manual" className="grid gap-3 pt-3">
+              <div>
+                <Label>Display name (optional)</Label>
+                <Input
+                  value={inviteForm.full_name}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, full_name: e.target.value }))}
+                  placeholder="Full name"
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+          <div className="grid gap-3 pt-1">
+            <div>
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div>
+              <Label>Role at signup *</Label>
+              {roleOptions.length === 0 ? (
+                <p className="text-sm text-destructive py-2">
+                  No roles available. Add roles under <strong>Administration → Role Management</strong> first.
+                </p>
+              ) : (
+                <Select
+                  value={
+                    roleOptions.includes(inviteForm.role_name || inviteRoleDefault)
+                      ? inviteForm.role_name || inviteRoleDefault
+                      : inviteRoleDefault
+                  }
+                  onValueChange={(v) => setInviteForm((f) => ({ ...f, role_name: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {appRolesError && (
+                      <div className="px-2 py-1.5 text-xs text-destructive">
+                        Could not load <code className="text-[10px]">app_roles</code>.{" "}
+                        <button type="button" className="underline font-medium" onClick={() => refetchAppRoles()}>
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                    {roleOptions.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-[11px] text-muted-foreground pt-1">
+                Roles are loaded from <strong className="text-foreground">Administration → Role Management</strong> (
+                <code className="text-[10px]">app_roles</code>
+                ), plus any roles already assigned to existing users.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInvite(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => inviteMutation.mutate()}
+              disabled={inviteMutation.isPending || roleOptions.length === 0}
+            >
+              {inviteMutation.isPending ? "Sending…" : "Send invitation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit user</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>Email</Label>
+              <Input value={editForm.email} disabled />
+            </div>
+            <div>
+              <Label>Full name</Label>
+              <Input
+                value={editForm.full_name}
+                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                placeholder="+91XXXXXXXXXX"
+              />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => updateUserMutation.mutate(editForm)}
+              disabled={updateUserMutation.isPending || !editForm.id}
+            >
+              {updateUserMutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRolePerms} onOpenChange={setShowRolePerms}>
+        <DialogContent className="max-h-[90vh] w-full max-w-[min(1600px,calc(100vw-1.5rem))] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Permissions — {roleNameFromAppRoleRow(selectedPermRole) || selectedPermRole?.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground pb-2">
+            Changes apply to all users with this role. The same matrix is available under Role Management.
+          </p>
+          <RolePermissionMatrix
+            value={permState}
+            onChange={setPermState}
+            disabled={saveRolePermissionsMutation.isPending || !canEditRolesMatrix}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRolePerms(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => saveRolePermissionsMutation.mutate()}
+              disabled={saveRolePermissionsMutation.isPending || !canEditRolesMatrix}
+            >
+              {saveRolePermissionsMutation.isPending ? "Saving…" : "Save permissions"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
