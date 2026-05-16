@@ -147,7 +147,7 @@ export default async function handler(req, res) {
     user_id: user.id,
     email,
     full_name: fullName,
-    current_role: currentRole,
+    profile_role: currentRole,
     status: "pending",
     last_notified_at: now.toISOString(),
     updated_at: now.toISOString(),

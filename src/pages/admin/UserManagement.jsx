@@ -313,7 +313,7 @@ export default function UserManagement() {
               <li key={req.id} className="flex flex-wrap items-center justify-between gap-2">
                 <span>
                   {req.full_name || req.email}{" "}
-                  <span className="text-muted-foreground">({req.email}) · role: {req.current_role || "user"}</span>
+                  <span className="text-muted-foreground">({req.email}) · role: {req.profile_role || "user"}</span>
                 </span>
                 <Button
                   size="sm"

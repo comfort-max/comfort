@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS public.user_access_requests (
   user_id uuid NOT NULL,
   email text NOT NULL DEFAULT '',
   full_name text NOT NULL DEFAULT '',
-  current_role text NOT NULL DEFAULT 'user',
+  profile_role text NOT NULL DEFAULT 'user',
   status text NOT NULL DEFAULT 'pending',
   message text,
   last_notified_at timestamptz,
