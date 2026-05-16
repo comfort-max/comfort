@@ -175,7 +175,14 @@ export default function Bills() {
         bill = await db.Bill.create(normalized);
       }
       if (items.length > 0) {
-        await db.BillItem.bulkCreate(items.map(i => ({ ...i, bill_id: bill.id || editingBill?.id, bill_number: normalized.bill_number })));
+        await db.BillItem.bulkCreate(
+          items.map((i) => ({
+            ...i,
+            bill_id: bill.id || editingBill?.id,
+            bill_number: normalized.bill_number,
+            delivery_status: i.delivery_status || "pending",
+          }))
+        );
       }
       return bill;
     },

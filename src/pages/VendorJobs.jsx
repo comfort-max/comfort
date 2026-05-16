@@ -95,10 +95,25 @@ export default function VendorJobs() {
       const poSeq = (existingPOs.length + 1).toString().padStart(3, '0');
       const orderNumber = `PO-${format(new Date(), 'yyMMdd')}-${poSeq}`;
       const po = await db.VendorOrder.create({ order_number: orderNumber, vendor_id: vendorId, vendor_name: vendorName, order_date: format(new Date(), 'yyyy-MM-dd'), total_items: totalItems, total_amount: totalAmount, amount_paid: 0, amount_due: totalAmount, payment_status: 'pending', status: 'active', entry_by: user?.full_name || user?.email || '', entry_timestamp: new Date().toISOString() });
-      await Promise.all(items.map(item => db.BillItem.update(item.id, { vendor_order_id: po.id })));
+      await Promise.all(
+        items.map((item) => {
+          const patch = { vendor_order_id: po.id };
+          const s = item.delivery_status;
+          if (!s || s === "pending") patch.delivery_status = "with_vendor";
+          return db.BillItem.update(item.id, patch);
+        })
+      );
       return po;
     },
-    onSuccess: (po) => { qc.invalidateQueries({ queryKey: ['bill-items-vj'] }); qc.invalidateQueries({ queryKey: ['bill-items-vo'] }); qc.invalidateQueries({ queryKey: ['bill-items-delivery'] }); qc.invalidateQueries({ queryKey: ['vendor-orders'] }); toast.success(`PO ${po.order_number} generated`); setSelectedItemIds({}); }
+    onSuccess: (po) => {
+      qc.invalidateQueries({ queryKey: ['bill-items-vj'] });
+      qc.invalidateQueries({ queryKey: ['bill-items-vo'] });
+      qc.invalidateQueries({ queryKey: ['bill-items-delivery'] });
+      qc.invalidateQueries({ queryKey: ['vendor-orders'] });
+      qc.invalidateQueries({ queryKey: ['vendor-orders-delivery'] });
+      toast.success(`PO ${po.order_number} generated`);
+      setSelectedItemIds({});
+    }
   });
 
   const markReadyMutation = useMutation({
@@ -143,7 +158,8 @@ export default function VendorJobs() {
   const deletePOMutation = useMutation({
     mutationFn: async (poIds) => {
       for (const poId of poIds) {
-        const linked = billItems.filter((i) => i.vendor_order_id === poId);
+        const poKey = String(poId);
+        const linked = billItems.filter((i) => i.vendor_order_id != null && String(i.vendor_order_id) === poKey);
         await Promise.all(
           linked.map((i) => db.BillItem.update(i.id, { vendor_order_id: null }))
         );
@@ -152,6 +168,7 @@ export default function VendorJobs() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-orders"] });
+      qc.invalidateQueries({ queryKey: ["vendor-orders-delivery"] });
       qc.invalidateQueries({ queryKey: ["bill-items-vj"] });
       qc.invalidateQueries({ queryKey: ["bill-items-vo"] });
       qc.invalidateQueries({ queryKey: ["bill-items-delivery"] });

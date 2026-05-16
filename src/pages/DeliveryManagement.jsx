@@ -59,6 +59,11 @@ export default function DeliveryManagement() {
   const [confirmDeleteLogs, setConfirmDeleteLogs] = useState(false);
 
   const { data: billItems = [] } = useQuery({ queryKey: ['bill-items-delivery'], queryFn: () => db.BillItem.list('-created_date', 2000), staleTime: 60 * 1000 });
+  const { data: vendorOrders = [] } = useQuery({
+    queryKey: ['vendor-orders-delivery'],
+    queryFn: () => db.VendorOrder.list('-order_date', 500),
+    staleTime: 60 * 1000,
+  });
   const { data: bills = [] } = useQuery({ queryKey: ['bills-delivery'], queryFn: () => db.Bill.list('-created_date', 200), staleTime: 10 * 60 * 1000 });
   const { data: employees = [] } = useQuery({ queryKey: ['employees-active'], queryFn: () => db.Employee.filter({ status: 'active' }), staleTime: 20 * 60 * 1000 });
   const { data: vendorBillings = [] } = useQuery({ queryKey: ['vendor-billings'], queryFn: () => db.VendorBilling.list('-created_date', 200), staleTime: 10 * 60 * 1000 });
@@ -94,7 +99,23 @@ export default function DeliveryManagement() {
     () => sortByLocaleKey(employees.filter((e) => e.role === "sales_delivery")),
     [employees]
   );
-  const vendorOrderItems = billItems.filter(i => i.vendor_id && i.vendor_order_id && i.delivery_status === 'with_vendor');
+  /** Active PO ids — cancelled/deleted POs are excluded so their lines leave Vendor Orders. */
+  const activeVendorPoIds = useMemo(
+    () => new Set(vendorOrders.map((po) => String(po.id))),
+    [vendorOrders]
+  );
+
+  /** PO issued and PO still exists; not yet ready for customer delivery. */
+  const vendorOrderItems = useMemo(
+    () =>
+      billItems.filter((i) => {
+        if (!i.vendor_id || !i.vendor_order_id) return false;
+        if (!activeVendorPoIds.has(String(i.vendor_order_id))) return false;
+        const s = i.delivery_status;
+        return s !== "ready_for_delivery" && s !== "delivered_unpaid" && s !== "delivered_paid";
+      }),
+    [billItems, activeVendorPoIds]
+  );
   const readyItems = billItems.filter(i => i.delivery_status === 'ready_for_delivery');
   const deliveredUnpaid = billItems.filter(i => i.delivery_status === 'delivered_unpaid');
 

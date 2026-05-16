@@ -23,7 +23,9 @@ export default function VendorOrdersPage() {
 
   const vendorsSorted = useMemo(() => sortByLocaleKey(vendors), [vendors]);
 
-  const unassignedItems = billItems.filter(i => !i.vendor_id && i.delivery_status === 'pending');
+  const unassignedItems = billItems.filter(
+    (i) => !i.vendor_id && (!i.delivery_status || i.delivery_status === "pending")
+  );
   const billGroups = {};
   unassignedItems.forEach(item => { if (!billGroups[item.bill_id]) billGroups[item.bill_id] = []; billGroups[item.bill_id].push(item); });
 
