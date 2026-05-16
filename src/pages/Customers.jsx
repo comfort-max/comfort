@@ -68,7 +68,11 @@ export default function Customers() {
   }, [billsForLedger]);
 
   const saveMutation = useMutation({
-    mutationFn: (data) => (editingId ? db.Customer.update(editingId, data) : db.Customer.create(data)),
+    mutationFn: (data) => {
+      if (!data.name?.trim()) throw new Error("Name is required");
+      if (!data.location?.trim()) throw new Error("Area/Locality is required");
+      return editingId ? db.Customer.update(editingId, data) : db.Customer.create(data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customers-all"] });
       setShowForm(false);
@@ -137,7 +141,7 @@ export default function Customers() {
     { key: "name", header: "Name", accessor: "name", sortable: true },
     { key: "phone", header: "Phone", accessor: "phone", sortable: true },
     { key: "email", header: "Email", accessor: "email" },
-    { key: "location", header: "Location", accessor: "location", sortable: true },
+    { key: "location", header: "Area/Locality", accessor: "location", sortable: true },
     {
       key: "advance_credit",
       header: "Advance / credit",
@@ -172,7 +176,7 @@ export default function Customers() {
           Name: c.name,
           Phone: c.phone || "",
           Email: c.email || "",
-          Location: c.location || "",
+          "Area/Locality": c.location || "",
           Address: c.address || "",
           "Advance / credit": customerCreditById[c.id]
             ? formatCurrencyAmount(customerCreditById[c.id], settingsRow)
@@ -243,9 +247,9 @@ export default function Customers() {
                 <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <Label>Location</Label>
+                <Label required>Area/Locality</Label>
                 <Input
-                  placeholder="Area / Locality"
+                  placeholder="e.g. Downtown, Sector 12"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
                   list="location-options"
@@ -269,7 +273,7 @@ export default function Customers() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.name}>
+            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.name?.trim() || !form.location?.trim() || saveMutation.isPending}>
               {editingId ? "Update" : "Add"}
             </Button>
           </DialogFooter>

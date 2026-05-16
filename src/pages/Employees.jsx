@@ -56,11 +56,28 @@ export default function Employees() {
     queryFn: () => db.Employee.list("-created_date", 200)
   });
 
+  const isFormValid =
+    Boolean(form.name?.trim()) &&
+    Boolean(form.joining_date) &&
+    Boolean(form.role) &&
+    Boolean(form.employee_type) &&
+    form.monthly_salary !== "" &&
+    form.monthly_salary != null &&
+    !Number.isNaN(Number(form.monthly_salary));
+
   const saveMutation = useMutation({
-    mutationFn: (data) =>
-      editingId
+    mutationFn: (data) => {
+      if (!data.name?.trim()) throw new Error("Name is required");
+      if (!data.joining_date) throw new Error("Joining date is required");
+      if (!data.role) throw new Error("Role is required");
+      if (!data.employee_type) throw new Error("Type is required");
+      if (data.monthly_salary === "" || data.monthly_salary == null || Number.isNaN(Number(data.monthly_salary))) {
+        throw new Error("Monthly salary is required");
+      }
+      return editingId
         ? db.Employee.update(editingId, data)
-        : db.Employee.create({ ...data, status: data.status || "active" }),
+        : db.Employee.create({ ...data, status: data.status || "active" });
+    },
     onSuccess: () => {
       invalidateAllEmployeeLists(qc);
       setShowForm(false);
@@ -235,7 +252,7 @@ export default function Employees() {
                 <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <Label>Joining Date</Label>
+                <Label required>Joining Date</Label>
                 <Input type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} />
               </div>
             </div>
@@ -247,7 +264,7 @@ export default function Employees() {
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label>Role</Label>
+                <Label required>Role</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -260,7 +277,7 @@ export default function Employees() {
               </div>
 
               <div>
-                <Label>Type</Label>
+                <Label required>Type</Label>
                 <Select value={form.employee_type} onValueChange={(v) => setForm({ ...form, employee_type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -271,7 +288,7 @@ export default function Employees() {
               </div>
 
               <div>
-                <Label>Monthly Salary ({curCode})</Label>
+                <Label required>Monthly Salary ({curCode})</Label>
                 <Input type="number" value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: Number(e.target.value) })} />
               </div>
             </div>
@@ -284,7 +301,7 @@ export default function Employees() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.name}>
+            <Button onClick={() => saveMutation.mutate(form)} disabled={!isFormValid || saveMutation.isPending}>
               {editingId ? "Update" : "Add"} Employee
             </Button>
           </DialogFooter>

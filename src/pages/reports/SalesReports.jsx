@@ -264,7 +264,7 @@ export default function SalesReports() {
         <TabsList className="mb-4">
           <TabsTrigger value="salesman">Salesman-wise</TabsTrigger>
           <TabsTrigger value="customer">Customer-wise</TabsTrigger>
-          <TabsTrigger value="location">Location-wise</TabsTrigger>
+          <TabsTrigger value="location">Area/Locality-wise</TabsTrigger>
         </TabsList>
         <TabsContent value="salesman">
           <FilterBar>
@@ -364,11 +364,11 @@ export default function SalesReports() {
         <TabsContent value="location">
           <FilterBar>
             <FilterSelect
-              label="Location"
+              label="Area/Locality"
               value={filterLocation}
               onChange={setFilterLocation}
               options={locationOptions}
-              placeholder="All locations"
+              placeholder="All areas / localities"
             />
           </FilterBar>
           {filteredLocationEntries.map(([location, billRows]) => (

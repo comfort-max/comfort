@@ -5,12 +5,12 @@ export const UI_THEME_PRESETS = [
   {
     id: "default",
     label: "Default (balanced)",
-    description: "Teal primary with the standard dark sidebar — current look.",
+    description: "Teal primary with the standard dark sidebar and matching page accents.",
   },
   {
     id: "slate_soft",
     label: "Slate — softer sidebar",
-    description: "Charcoal sidebar that is lighter than pure black; high-contrast menu text.",
+    description: "Charcoal sidebar with lighter tabs, headers, and accents across the app.",
   },
   {
     id: "light_sidebar",

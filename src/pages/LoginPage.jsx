@@ -186,9 +186,6 @@ export default function LoginPage() {
               {oauthLoading === "facebook" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Facebook"}
             </Button>
           </div>
-          <p className="text-[11px] text-muted-foreground text-center leading-snug px-1">
-            Google and Facebook only work after they are enabled in the Supabase project (Authentication → Providers). The app URL must be allowed in each provider’s redirect settings.
-          </p>
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />

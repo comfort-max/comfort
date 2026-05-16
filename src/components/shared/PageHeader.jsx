@@ -142,7 +142,7 @@ export default function PageHeader({
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-primary">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         {dateRange ? (
           <p className="text-xs text-muted-foreground mt-1.5 font-medium">Period: {dateRange}</p>

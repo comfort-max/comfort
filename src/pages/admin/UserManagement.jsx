@@ -255,29 +255,6 @@ export default function UserManagement() {
         </Button>
         )}
       </PageHeader>
-      <div className="mb-4 p-3 bg-muted/60 border rounded-lg text-sm text-muted-foreground space-y-2">
-        <p>
-          <strong className="text-foreground">Production (Vercel — no Supabase CLI needed):</strong> in the Vercel project →{" "}
-          <span className="font-medium text-foreground">Settings → Environment Variables</span>, add these three (copy values
-          from Supabase Dashboard → Project Settings → API):{" "}
-          <code className="text-xs">SUPABASE_URL</code> (same as <code className="text-xs">VITE_SUPABASE_URL</code>),{" "}
-          <code className="text-xs">SUPABASE_ANON_KEY</code> (same as <code className="text-xs">VITE_SUPABASE_ANON_KEY</code>), and{" "}
-          <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code> (service role — server only, never{" "}
-          <code className="text-xs">VITE_*</code>). Also add SMTP: <code className="text-xs">EMAIL_USER</code>,{" "}
-          <code className="text-xs">EMAIL_PASS</code>, optional <code className="text-xs">EMAIL_FROM_ADDRESS</code>. Then{" "}
-          <strong className="text-foreground">redeploy</strong> the site. Invites call <code className="text-xs">/api/admin/invite</code> on
-          Vercel.
-        </p>
-        <p>
-          Locally run <code className="text-xs">npm run dev:full</code> so <code className="text-xs">/api/admin/invite</code> is proxied to
-          the email server (e.g. port 3001) with the same vars in a root <code className="text-xs">.env</code>.
-        </p>
-        <p>
-          <strong className="text-foreground">Optional (advanced):</strong> Supabase Edge Function <code className="text-xs">admin-invite</code>{" "}
-          avoids storing the service role on Vercel; set <code className="text-xs">VITE_INVITE_USE_SUPABASE_EDGE=true</code> in the
-          front-end env only after that function is deployed (e.g. via CI or someone with the CLI).
-        </p>
-      </div>
       <DataTable columns={columns} data={users} loading={isLoading} searchPlaceholder="Search users..." />
 
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
