@@ -102,7 +102,7 @@ export default function AcceptInvitePage() {
           <CardTitle className="text-lg">Verify email &amp; set password</CardTitle>
           <p className="text-sm text-muted-foreground">
             Your email is verified from the invite link. Choose a password for this account, or go back to login and
-            use Google or Facebook instead.
+            use Google or Yahoo instead.
           </p>
         </CardHeader>
         <CardContent>

@@ -1,0 +1,24 @@
+-- Yahoo is NOT a built-in Supabase provider. Configure it as a custom OIDC provider in the Dashboard,
+-- then use the Comfort login "Yahoo" button (provider id: custom:yahoo).
+--
+-- 1) Yahoo Developer (https://developer.yahoo.com/apps/)
+--    - Create app → Web application
+--    - Redirect URI (OAuth2): https://<PROJECT_REF>.supabase.co/auth/v1/callback
+--    - Permissions: OpenID Connect, email, profile
+--    - Note Client ID (Consumer Key) and Client Secret (Consumer Secret)
+--
+-- 2) Supabase Dashboard → Authentication → Providers → New Provider
+--    - Configuration: Auto-discovery (OIDC)
+--    - Identifier: custom:yahoo   (must match app; or set VITE_YAHOO_OAUTH_PROVIDER)
+--    - Issuer URL: https://api.login.yahoo.com
+--    - Client ID / Secret: from Yahoo app
+--    - Scopes: openid profile email
+--    - Enable provider
+--
+-- 3) Supabase → Authentication → URL configuration
+--    - Site URL + Redirect URLs (e.g. https://your-app.vercel.app/**, http://localhost:5173/**)
+--
+-- Discovery document (reference):
+-- https://api.login.yahoo.com/.well-known/openid-configuration
+
+SELECT 'Configure Yahoo in Supabase Dashboard; no SQL required for OAuth.' AS note;

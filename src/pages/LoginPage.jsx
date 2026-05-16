@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
 
 const RESET_EMAIL_COOLDOWN_MS = 90_000;
 
@@ -69,7 +70,7 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!password) {
-      toast.error("Enter your password, or use Google / Facebook.");
+      toast.error(`Enter your password, or use ${SOCIAL_LOGIN_NAMES}.`);
       return;
     }
     setLoading(true);
@@ -127,8 +128,8 @@ export default function LoginPage() {
     }
   };
 
-  const oauth = async (provider) => {
-    setOauthLoading(provider);
+  const oauth = async (provider, loadingKey) => {
+    setOauthLoading(loadingKey || provider);
     try {
       const redirectTo = `${window.location.origin}/`;
       const { error } = await supabase.auth.signInWithOAuth({
@@ -140,10 +141,12 @@ export default function LoginPage() {
       const msg = err?.message || String(err);
       if (/not enabled|Unsupported provider|validation_failed/i.test(msg)) {
         toast.error(
-          "Social sign-in is turned off for this backend. In Supabase: Authentication → Providers → enable Google and/or Facebook, add each provider’s Client ID and Secret, and add your site URL under Redirect URLs."
+          "Social sign-in is not configured. In Supabase: enable Google under Providers, add Yahoo as a custom OIDC provider (custom:yahoo), and add your site URL under Redirect URLs."
         );
       } else {
-        toast.error(msg || `${provider} sign-in failed`);
+        const label =
+          LOGIN_OAUTH_PROVIDERS.find((p) => p.provider === provider)?.label || "Social";
+        toast.error(msg || `${label} sign-in failed`);
       }
       setOauthLoading(null);
     }
@@ -164,29 +167,28 @@ export default function LoginPage() {
           <CardTitle className="text-2xl font-bold">{companyName}</CardTitle>
           <p className="text-sm font-medium text-foreground">Sign in</p>
           <p className="text-sm text-muted-foreground leading-snug max-w-xs mx-auto">
-            Laundry management — use email and password or a social account below.
+            Sign in with Google or Yahoo, or use your email and password below.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={!!oauthLoading}
-              onClick={() => oauth("google")}
-            >
-              {oauthLoading === "google" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Google"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={!!oauthLoading}
-              onClick={() => oauth("facebook")}
-            >
-              {oauthLoading === "facebook" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Facebook"}
-            </Button>
+            {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => (
+              <Button
+                key={key}
+                type="button"
+                variant="outline"
+                className="w-full"
+                title={`Sign in with ${label}`}
+                disabled={!!oauthLoading}
+                onClick={() => oauth(provider, key)}
+              >
+                {oauthLoading === key ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  label
+                )}
+              </Button>
+            ))}
           </div>
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -235,7 +237,7 @@ export default function LoginPage() {
             </div>
           </form>
           <p className="text-sm text-muted-foreground text-center leading-relaxed">
-            Invited by email? Open the link from your invitation, then set a password here or use Google / Facebook.
+            Invited by email? Open the link from your invitation, then set a password here or use {SOCIAL_LOGIN_NAMES}.
           </p>
         </CardContent>
       </Card>
