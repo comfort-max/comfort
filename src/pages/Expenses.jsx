@@ -67,9 +67,13 @@ export default function Expenses() {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const { file_url } = await uploadFile(file);
-    setForm(f => ({ ...f, receipt_url: file_url }));
-    toast.success("Receipt uploaded");
+    try {
+      const { file_url } = await uploadFile(file);
+      setForm((f) => ({ ...f, receipt_url: file_url }));
+      toast.success("Receipt uploaded");
+    } catch (err) {
+      toast.error(err?.message || "Receipt upload failed");
+    }
   };
 
   const parentCategories = useMemo(

@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, Download, Trash2, Loader2 } from "lucide-react";
-import { uploadFile } from "@/services/SupabaseService";
+import { uploadFile, getComfortFilesDisplayUrl } from "@/services/SupabaseService";
 import { toast } from "sonner";
 
 export default function FileUploadButton({
@@ -30,13 +30,17 @@ export default function FileUploadButton({
       onFileUpload(uploadedFile.file_url);
       toast.success("File uploaded successfully");
     } catch (err) {
-      toast.error("Failed to upload file");
+      toast.error(err?.message || "Failed to upload file");
     }
   };
 
-  const handleDownload = () => {
-    if (fileUrl) {
-      window.open(fileUrl, "_blank");
+  const handleDownload = async () => {
+    if (!fileUrl) return;
+    try {
+      const href = await getComfortFilesDisplayUrl(fileUrl);
+      window.open(href, "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
     }
   };
 

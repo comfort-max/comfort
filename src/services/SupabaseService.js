@@ -243,11 +243,24 @@ export const db = {
 // For private buckets, use getComfortFilesDisplayUrl() wherever the image is shown or fetched.
 export async function uploadFile(file) {
   return withTrackedAction(async () => {
-    const fileName = `${Date.now()}-${file.name}`;
+    const safeName = String(file.name || 'file').replace(/[^\w.\-()+ ]/g, '_');
+    const fileName = `${Date.now()}-${safeName}`;
     const { error } = await supabase.storage
       .from('comfort-files')
-      .upload(fileName, file);
-    if (error) throw error;
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+    if (error) {
+      const msg = error.message || '';
+      if (/bucket not found/i.test(msg)) {
+        throw new Error(
+          'Storage bucket "comfort-files" is missing. Run supabase/migrations/20260520100000_comfort_files_storage.sql in the Supabase SQL Editor.'
+        );
+      }
+      throw error;
+    }
     const { data: urlData } = supabase.storage
       .from('comfort-files')
       .getPublicUrl(fileName);
