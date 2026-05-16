@@ -28,6 +28,12 @@ import { getBillSalesmanDisplayName } from "@/lib/billSalesman";
 import { buildWhatsappMeUrl } from "@/lib/whatsappLink";
 import { sortByLocaleKey, sortStringsForDisplay } from "@/lib/utils";
 import { buildDeliveredLineItemPaymentPatch } from "@/lib/deliveredLinePayment";
+import { useCommunicationTemplates } from "@/hooks/useCommunicationTemplates";
+import {
+  buildJobReminderVars,
+  getDefaultEmailTemplate,
+  resolveRenderedMessage,
+} from "@/lib/communicationTemplate";
 import { computeBillCustomerBalance } from "@/lib/paymentBalance";
 import { activePaymentMethodsSorted, defaultPaymentMethodName as pickDefaultPaymentMethod, paymentMethodSelectValue } from "@/lib/paymentMethodUi";
 
@@ -69,6 +75,7 @@ export default function DeliveryManagement() {
   const { data: vendorBillings = [] } = useQuery({ queryKey: ['vendor-billings'], queryFn: () => db.VendorBilling.list('-created_date', 200), staleTime: 10 * 60 * 1000 });
   const { data: vendors = [] } = useQuery({ queryKey: ['vendors-all'], queryFn: () => db.Vendor.list(), staleTime: 30 * 60 * 1000 });
   const { data: companySettings = [] } = useQuery({ queryKey: ['company-settings'], queryFn: () => db.CompanySettings.list(), staleTime: 30 * 60 * 1000 });
+  const { data: commTemplates = [] } = useCommunicationTemplates();
   const { data: reminderLogs = [] } = useQuery({ queryKey: ['reminder-logs-delivery'], queryFn: () => db.ReminderLog.filter({ reminder_type: 'delivery' }), staleTime: 10 * 60 * 1000 });
   const { data: paymentMethods } = usePaymentMethodsQuery();
   const paymentMethodsList = paymentMethods ?? [];
@@ -402,12 +409,30 @@ export default function DeliveryManagement() {
       for (const vendor of selectedVendors) {
         const vendorItems = vendorOrderItems.filter(i => i.vendor_id === vendor.id);
         const totalAmount = vendorItems.reduce((s, i) => s + (i.vendor_amount || 0), 0);
-        const itemList = vendorItems.map(i => `- Bill #${i.bill_number}: ${i.item_name} x${i.quantity} - ${formatCurrencyAmount(i.vendor_amount || 0, settingsRow)}`).join('\n');
-        const body = `Dear ${vendor.name},\n\nThis is a reminder for pending items.\n\nPending Items:\n${itemList}\n\nTotal: ${formatCurrencyAmount(totalAmount, settingsRow)}\n\nBest Regards,\n${companyName}`;
+        const vars = buildJobReminderVars({
+          vendor,
+          billNumber: vendorItems[0]?.bill_number,
+          items: vendorItems,
+          companySettings: settingsRow,
+        });
+        const fallback = getDefaultEmailTemplate("job_reminder_vendor");
+        const rendered = resolveRenderedMessage({
+          templates: commTemplates,
+          purpose: "job_reminder_vendor",
+          channel: "email",
+          vars,
+          fallbackSubject: fallback.subject,
+          fallbackBody: `Dear ${vendor.name},\n\nPending Items:\n${vars.items}\n\nTotal: ${vars.total_amount}\n\nBest Regards,\n${companyName}`,
+        });
 
         if (channels.sendEmail && vendor.email) {
           try {
-            await sendEmail({ to: vendor.email, subject: 'Delivery Reminder — Pending Items', body, fromName: companySettings[0]?.email_from_name || companyName });
+            await sendEmail({
+              to: vendor.email,
+              subject: rendered.subject || "Delivery Reminder — Pending Items",
+              body: rendered.body,
+              fromName: companySettings[0]?.email_from_name || companyName,
+            });
             success++;
             await db.ReminderLog.create({
               reminder_type: 'delivery',
@@ -442,9 +467,21 @@ export default function DeliveryManagement() {
     if (!vendor) return '';
     const companyName = companySettings[0]?.company_name || 'COMFORT';
     const vendorItems = vendorOrderItems.filter(i => i.vendor_id === vendor.id);
-    const totalAmount = vendorItems.reduce((s, it) => s + (it.vendor_amount || 0), 0);
-    const itemList = vendorItems.map(it => `- Bill #${it.bill_number}: ${it.item_name} x${it.quantity} - ${formatCurrencyAmount(it.vendor_amount || 0, settingsRow)}`).join('\n');
-    return `Dear ${vendor.name},\n\nThis is a reminder for pending items.\n\nPending Items:\n${itemList}\n\nTotal: ${formatCurrencyAmount(totalAmount, settingsRow)}\n\nBest Regards,\n${companyName}`;
+    const vars = buildJobReminderVars({
+      vendor,
+      billNumber: vendorItems[0]?.bill_number,
+      items: vendorItems,
+      companySettings: settingsRow,
+    });
+    const fallback = getDefaultEmailTemplate("job_reminder_vendor");
+    return resolveRenderedMessage({
+      templates: commTemplates,
+      purpose: "job_reminder_vendor",
+      channel: "whatsapp",
+      vars,
+      fallbackSubject: "",
+      fallbackBody: fallback.body || `Dear ${vendor.name},\n\nPending Items:\n${vars.items}\n\nTotal: ${vars.total_amount}\n\nBest Regards,\n${companyName}`,
+    }).body;
   };
 
   const openWhatsappVendorReminders = async (selectedRecipients, opts = {}) => {

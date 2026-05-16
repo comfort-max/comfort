@@ -91,7 +91,7 @@ export default function DataTable({
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
+              <TableRow className="chrome-bar border-0">
                 {selectable && (
                   <TableHead className="w-12">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />

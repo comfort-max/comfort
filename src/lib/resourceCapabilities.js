@@ -38,6 +38,7 @@ export const RESOURCE_CAPABILITIES = {
     { key: "delete", label: "Move bills to trash", short: "Del", inherit: "edit" },
     { key: "export", label: "Export / print / download", short: "Export", inherit: "view" },
     { key: "upload", label: "Upload receipts / files", short: "Upload", inherit: "edit" },
+    { key: "bill_notify_send", label: "Email / WhatsApp bill notification to customer", short: "Notify", inherit: "edit" },
   ],
 
   vendor_orders: [

@@ -40,6 +40,10 @@
     --sidebar-accent-foreground: 210 15% 90%;
     --sidebar-border: 220 20% 20%;
     --sidebar-ring: 192 70% 50%;
+    /* Tab bars & table headers on main content (paired fg/bg) */
+    --chrome-bar-bg: 210 15% 93%;
+    --chrome-bar-fg: 220 12% 38%;
+    --page-heading-fg: 220 25% 10%;
   }
 
   .dark {
@@ -321,20 +325,43 @@
     --sidebar-ring: 177 100% 36%;
   }
 
-  /* Tie main UI chrome (tabs, headers, accents) to sidebar palette — lighter than the menu bar.
-     Do NOT map --muted-foreground or --secondary-foreground from sidebar: those are light-on-dark
-     sidebar colors and make instructions/subtitles invisible on the main (light) content area. */
+  /* Tie accents to sidebar; tab bars & table headers use paired chrome-bar fg/bg (light text on dark bar, etc.). */
   html[data-ui-theme]:not([data-ui-theme="default"]) {
     --primary: var(--sidebar-primary);
     --primary-foreground: var(--sidebar-primary-foreground);
     --ring: var(--sidebar-ring);
     --secondary: var(--sidebar-accent);
-    --muted: var(--sidebar-accent);
     --accent: var(--sidebar-primary);
     --accent-foreground: var(--sidebar-primary-foreground);
     --border: var(--sidebar-border);
     --input: var(--sidebar-border);
+    --chrome-bar-bg: var(--sidebar-accent);
+    --chrome-bar-fg: var(--sidebar-foreground);
+    --page-heading-fg: var(--foreground);
   }
+}
+
+@layer components {
+  .chrome-bar {
+    background-color: hsl(var(--chrome-bar-bg));
+    color: hsl(var(--chrome-bar-fg));
+  }
+}
+
+/* After Tailwind utilities so themed table/tab chrome wins over bg-muted/text-muted on header rows */
+thead tr:not([class*="bg-amber"]):not([class*="bg-primary"]) {
+  background-color: hsl(var(--chrome-bar-bg) / 0.96) !important;
+  color: hsl(var(--chrome-bar-fg)) !important;
+}
+
+thead tr:not([class*="bg-amber"]) th {
+  color: hsl(var(--chrome-bar-fg)) !important;
+  font-weight: 600;
+}
+
+thead tr[class*="bg-amber"] th {
+  color: hsl(var(--foreground) / 0.72) !important;
+  font-weight: 600;
 }
 
 @layer base {

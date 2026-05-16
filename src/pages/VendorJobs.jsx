@@ -25,6 +25,12 @@ import { formatCurrencyAmount, getCurrencyConfig } from "@/lib/currency";
 import { useAppCurrency } from "@/hooks/useAppCurrency";
 import { sortByLocaleKey } from "@/lib/utils";
 import { buildWhatsappMeUrl } from "@/lib/whatsappLink";
+import { useCommunicationTemplates } from "@/hooks/useCommunicationTemplates";
+import {
+  buildPoVendorVars,
+  getDefaultEmailTemplate,
+  resolveRenderedMessage,
+} from "@/lib/communicationTemplate";
 
 export default function VendorJobs() {
   const qc = useQueryClient();
@@ -459,6 +465,7 @@ function PODetailDialog({ data, bills, vendors, onClose, currentUser, canCancelP
   const [companySettings, setCompanySettings] = useState({});
 
   const { data: settings = [] } = useQuery({ queryKey: ['company-settings-po'], queryFn: () => db.CompanySettings.list() });
+  const { data: commTemplates = [] } = useCommunicationTemplates(!!data);
   const vendor = vendors.find(v => v.id === data?.po?.vendor_id);
 
   useEffect(() => { if (settings.length > 0) setCompanySettings(settings[0]); }, [settings]);
@@ -472,8 +479,22 @@ function PODetailDialog({ data, bills, vendors, onClose, currentUser, canCancelP
       const totalAmt = items.reduce((s, i) => s + (i.vendor_amount || 0), 0);
       const pdfRows = items.map(item => { const bill = bills.find(b => b.id === item.bill_id); return { bill_number: item.bill_number, customer_name: bill?.customer_name || '-', item_name: item.item_name, category: item.category || '-', quantity: item.quantity, vendor_rate: item.vendor_rate || 0, vendor_amount: item.vendor_amount || 0 }; });
       const pdfBase64 = generatePdfBase64({ title: `Purchase Order ${po.order_number}`, subtitle: `Vendor: ${po.vendor_name} | Date: ${po.order_date}`, columns: [{ header: 'Bill #', key: 'bill_number' }, { header: 'Customer', key: 'customer_name' }, { header: 'Item', key: 'item_name' }, { header: 'Category', key: 'category' }, { header: 'Qty', key: 'quantity' }, { header: 'Rate', key: 'vendor_rate' }, { header: 'Amount', key: 'vendor_amount' }], rows: pdfRows, companySettings, grandTotal: totalAmt });
-      const body = `Dear ${po.vendor_name},\n\nWe are pleased to place order for ${totalQty} number of Items, totalling ${formatCurrencyAmount(totalAmt, companySettings)}. Please find attached the Purchase Order.\n\nThanks for your co-operation.\n\nBest Regards,\n${companySettings.company_name || 'COMFORT'}`;
-      await sendEmail({ to: vendorEmail, subject: `Purchase Order — ${po.order_number}`, body, fromName: companySettings.email_from_name || companySettings.company_name });
+      const vars = buildPoVendorVars({ po, items, companySettings });
+      const fallback = getDefaultEmailTemplate("po_vendor");
+      const rendered = resolveRenderedMessage({
+        templates: commTemplates,
+        purpose: "po_vendor",
+        channel: "email",
+        vars,
+        fallbackSubject: fallback.subject,
+        fallbackBody: `Dear ${po.vendor_name},\n\nWe are pleased to place order for ${totalQty} Items, totalling ${formatCurrencyAmount(totalAmt, companySettings)}. Please find attached the Purchase Order.\n\nBest Regards,\n${companySettings.company_name || "COMFORT"}`,
+      });
+      await sendEmail({
+        to: vendorEmail,
+        subject: rendered.subject || `Purchase Order — ${po.order_number}`,
+        body: rendered.body,
+        fromName: companySettings.email_from_name || companySettings.company_name,
+      });
     },
     onSuccess: () => { toast.success("Email sent to vendor"); setEmailDialog(false); setVendorEmail(''); },
     onError: (err) => toast.error(err.message || "Failed to send email")
@@ -486,7 +507,16 @@ function PODetailDialog({ data, bills, vendors, onClose, currentUser, canCancelP
   const totalAmt = items.reduce((s, i) => s + (i.vendor_amount || 0), 0);
   const curCode = getCurrencyConfig(companySettings).code;
 
-  const defaultWhatsappPoMessage = `Dear ${po.vendor_name},\n\nWe are pleased to place order for ${totalQty} Items, totalling ${formatCurrencyAmount(totalAmt, companySettings)}. Kindly proceed with the work.\n\nBest Regards,\n${companySettings.company_name || 'COMFORT'}`;
+  const poVars = buildPoVendorVars({ po, items, companySettings });
+  const poFallback = getDefaultEmailTemplate("po_vendor");
+  const defaultWhatsappPoMessage = resolveRenderedMessage({
+    templates: commTemplates,
+    purpose: "po_vendor",
+    channel: "whatsapp",
+    vars: poVars,
+    fallbackSubject: "",
+    fallbackBody: poFallback.body || `Dear ${po.vendor_name},\n\nOrder ${po.order_number} for ${totalQty} items, totalling ${formatCurrencyAmount(totalAmt, companySettings)}.\n\nBest Regards,\n${companySettings.company_name || "COMFORT"}`,
+  }).body;
 
   const openWhatsappCompose = () => {
     if (!vendor?.phone?.trim()) {

@@ -16,21 +16,18 @@ import { Plus, Edit2, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { sortByLocaleKey } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import {
+  PURPOSE_REGISTRY,
+  getBuiltinPurposeOptions,
+  getCustomPurposeOptions,
+  getDefaultEmailTemplate,
+  getPlaceholdersForPurpose,
+  getPurposeLabel,
+  slugifyPurpose,
+  templateByPurposeChannel,
+} from "@/lib/communicationTemplate";
 
-const purposeLabels = {
-  po_vendor: "PO to Vendor",
-  payment_reminder_customer: "Payment Reminder - Customer",
-  job_reminder_vendor: "Job Reminder - Vendor",
-};
-
-const purposeSelectOptions = sortByLocaleKey(
-  [
-    { value: "po_vendor", label: purposeLabels.po_vendor },
-    { value: "payment_reminder_customer", label: purposeLabels.payment_reminder_customer },
-    { value: "job_reminder_vendor", label: purposeLabels.job_reminder_vendor },
-  ],
-  "label"
-);
+const CUSTOM_PURPOSE_VALUE = "__custom__";
 
 const channelSelectOptions = sortByLocaleKey(
   [
@@ -39,88 +36,6 @@ const channelSelectOptions = sortByLocaleKey(
   ],
   "label"
 );
-
-/**
- * Starter subject + body when creating a new template (edit freely).
- * Merge tokens must match PLACEHOLDERS_BY_PURPOSE exactly so future sending logic can substitute them.
- */
-const DEFAULT_EMAIL_TEMPLATES = {
-  po_vendor: {
-    subject: "Purchase Order {{order_number}} — {{vendor_name}}",
-    body: `Dear {{vendor_name}},
-
-Please find our purchase order {{order_number}} dated {{order_date}}.
-
-Total quantity: {{total_qty}}
-Order value: {{total_amount}}
-
-Kindly confirm receipt and processing.
-
-Thank you,
-{{company_name}}`,
-  },
-  payment_reminder_customer: {
-    subject: "Payment reminder — Bill {{bill_number}}",
-    body: `Dear {{customer_name}},
-
-This is a gentle reminder regarding bill {{bill_number}}.
-
-Bill total: {{grand_total}}
-Amount still due: {{amount_due}}
-
-Please arrange payment at your earliest convenience.
-
-Thank you,
-{{company_name}}`,
-  },
-  job_reminder_vendor: {
-    subject: "Reminder — pending work for {{vendor_name}}",
-    body: `Dear {{vendor_name}},
-
-Regarding bill {{bill_number}}, the following is still pending:
-
-{{items}}
-
-Total quantity: {{total_qty}}
-Total amount: {{total_amount}}
-
-Please update us on progress.
-
-Best regards,
-{{company_name}}`,
-  },
-};
-
-/** Allowed merge-field tokens per purpose — insert these exactly; edit all other wording freely. */
-const PLACEHOLDERS_BY_PURPOSE = {
-  po_vendor: [
-    "{{vendor_name}}",
-    "{{order_number}}",
-    "{{order_date}}",
-    "{{total_qty}}",
-    "{{total_amount}}",
-    "{{company_name}}",
-  ],
-  payment_reminder_customer: [
-    "{{customer_name}}",
-    "{{bill_number}}",
-    "{{grand_total}}",
-    "{{amount_due}}",
-    "{{company_name}}",
-  ],
-  job_reminder_vendor: [
-    "{{vendor_name}}",
-    "{{bill_number}}",
-    "{{items}}",
-    "{{total_qty}}",
-    "{{total_amount}}",
-    "{{company_name}}",
-  ],
-};
-
-function templateByPurposeChannel(list, purpose, channel) {
-  return (list || []).find((t) => t.purpose === purpose && t.channel === channel) || null;
-}
 
 function insertTokenInTextarea(textarea, currentValue, token, setValue) {
   if (!textarea) return;
@@ -146,11 +61,15 @@ export default function CommunicationTemplates() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [formData, setFormData] = useState({
     purpose: "",
+    purpose_label: "",
     channel: "email",
     subject: "",
     body: "",
     status: "active",
   });
+  const [customPurposeMode, setCustomPurposeMode] = useState(false);
+  const [customPurposeLabel, setCustomPurposeLabel] = useState("");
+  const [customPurposeSlug, setCustomPurposeSlug] = useState("");
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["communication-templates"],
@@ -159,9 +78,31 @@ export default function CommunicationTemplates() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["communication-templates"] });
 
+  const purposeSelectOptions = useMemo(() => {
+    const builtins = getBuiltinPurposeOptions();
+    const customs = getCustomPurposeOptions(templates);
+    const merged = sortByLocaleKey(
+      [
+        ...builtins,
+        ...customs.filter((c) => !builtins.some((b) => b.value === c.value)),
+        { value: CUSTOM_PURPOSE_VALUE, label: "+ Add custom purpose…" },
+      ],
+      "label"
+    );
+    return merged;
+  }, [templates]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const purpose = formData.purpose;
+      let purpose = formData.purpose;
+      if (customPurposeMode || purpose === CUSTOM_PURPOSE_VALUE) {
+        purpose = slugifyPurpose(customPurposeSlug || customPurposeLabel);
+        if (!purpose) throw new Error("Custom purpose key is required");
+      }
+      const purposeLabel =
+        customPurposeMode || formData.purpose === CUSTOM_PURPOSE_VALUE
+          ? (customPurposeLabel || "").trim() || null
+          : templates.find((t) => t.purpose === purpose)?.purpose_label || null;
       const status = formData.status;
       if (!purpose) throw new Error("Purpose is required");
 
@@ -176,6 +117,7 @@ export default function CommunicationTemplates() {
           subject: "",
           body: email.body,
           status,
+          purpose_label: email.purpose_label ?? purposeLabel,
         });
         return { mode: "whatsapp_status" };
       }
@@ -184,7 +126,14 @@ export default function CommunicationTemplates() {
       if (!body) throw new Error("Message body is required");
       const subject = (formData.subject || "").trim();
       const email = templateByPurposeChannel(templates, purpose, "email");
-      const emailPayload = { purpose, channel: "email", subject, body, status };
+      const emailPayload = {
+        purpose,
+        channel: "email",
+        subject,
+        body,
+        status,
+        purpose_label: PURPOSE_REGISTRY[purpose] ? null : purposeLabel,
+      };
 
       if (email) {
         await db.CommunicationTemplate.update(email.id, { ...email, ...emailPayload });
@@ -194,7 +143,14 @@ export default function CommunicationTemplates() {
 
       const all = await db.CommunicationTemplate.list();
       const wa = templateByPurposeChannel(all, purpose, "whatsapp");
-      const waPayload = { purpose, channel: "whatsapp", subject: "", body, status };
+      const waPayload = {
+        purpose,
+        channel: "whatsapp",
+        subject: "",
+        body,
+        status,
+        purpose_label: PURPOSE_REGISTRY[purpose] ? null : purposeLabel,
+      };
       if (wa) {
         await db.CommunicationTemplate.update(wa.id, { ...wa, ...waPayload });
       } else {
@@ -235,21 +191,32 @@ export default function CommunicationTemplates() {
       setSelectedTemplate(template);
       setFormData({
         purpose: template.purpose,
+        purpose_label: template.purpose_label || "",
         channel: template.channel,
         subject: template.subject || "",
         body: template.body || "",
         status: template.status || "active",
       });
+      setCustomPurposeMode(!PURPOSE_REGISTRY[template.purpose]);
+      setCustomPurposeLabel(template.purpose_label || "");
+      setCustomPurposeSlug(template.purpose);
     } else {
       setSelectedTemplate(null);
-      setFormData({ purpose: "", channel: "email", subject: "", body: "", status: "active" });
+      setFormData({ purpose: "", purpose_label: "", channel: "email", subject: "", body: "", status: "active" });
+      setCustomPurposeMode(false);
+      setCustomPurposeLabel("");
+      setCustomPurposeSlug("");
     }
     setFormDialog(true);
   };
 
   const handleSubmit = () => {
-    if (!formData.purpose) {
+    if (!formData.purpose && !customPurposeMode) {
       toast.error("Purpose is required");
+      return;
+    }
+    if ((customPurposeMode || formData.purpose === CUSTOM_PURPOSE_VALUE) && !customPurposeLabel.trim()) {
+      toast.error("Custom purpose name is required");
       return;
     }
     if (formData.channel === "email" && !(formData.body || "").trim()) {
@@ -263,12 +230,20 @@ export default function CommunicationTemplates() {
     saveMutation.mutate();
   };
 
-  const emailBodyForPurpose = useMemo(() => {
-    if (!formData.purpose) return "";
-    return templateByPurposeChannel(templates, formData.purpose, "email")?.body || "";
-  }, [templates, formData.purpose]);
+  const effectivePurpose = useMemo(
+    () =>
+      customPurposeMode || formData.purpose === CUSTOM_PURPOSE_VALUE
+        ? slugifyPurpose(customPurposeSlug || customPurposeLabel)
+        : formData.purpose,
+    [customPurposeMode, formData.purpose, customPurposeSlug, customPurposeLabel]
+  );
 
-  const placeholderTokens = PLACEHOLDERS_BY_PURPOSE[formData.purpose] || [];
+  const emailBodyForPurpose = useMemo(() => {
+    if (!effectivePurpose) return "";
+    return templateByPurposeChannel(templates, effectivePurpose, "email")?.body || "";
+  }, [templates, effectivePurpose]);
+
+  const placeholderTokens = getPlaceholdersForPurpose(effectivePurpose);
 
   const insertPlaceholder = useCallback(
     (token) => {
@@ -281,7 +256,7 @@ export default function CommunicationTemplates() {
   );
 
   const columns = [
-    { key: "purpose", header: "Purpose", sortable: true, render: (t) => purposeLabels[t.purpose] || t.purpose },
+    { key: "purpose", header: "Purpose", sortable: true, render: (t) => getPurposeLabel(t.purpose, templates) },
     { key: "channel", header: "Channel", sortable: true, render: (t) => t.channel.charAt(0).toUpperCase() + t.channel.slice(1) },
     { key: "subject", header: "Subject", render: (t) => t.subject || "—" },
     {
@@ -360,7 +335,7 @@ export default function CommunicationTemplates() {
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {previewTemplate ? `${purposeLabels[previewTemplate.purpose] || previewTemplate.purpose} · ${previewTemplate.channel}` : ""}
+              {previewTemplate ? `${getPurposeLabel(previewTemplate.purpose, templates)} · ${previewTemplate.channel}` : ""}
             </DialogTitle>
           </DialogHeader>
           {previewTemplate && (
@@ -403,15 +378,23 @@ export default function CommunicationTemplates() {
               <div>
                 <Label>Purpose *</Label>
                 <Select
-                  value={formData.purpose}
+                  value={customPurposeMode ? CUSTOM_PURPOSE_VALUE : formData.purpose}
                   onValueChange={(v) => {
+                    if (v === CUSTOM_PURPOSE_VALUE) {
+                      setCustomPurposeMode(true);
+                      setFormData((prev) => ({ ...prev, purpose: CUSTOM_PURPOSE_VALUE }));
+                      return;
+                    }
+                    setCustomPurposeMode(false);
+                    setCustomPurposeLabel("");
+                    setCustomPurposeSlug("");
                     setFormData((prev) => {
                       if (selectedTemplate) return { ...prev, purpose: v };
                       const next = { ...prev, purpose: v };
                       if (prev.channel !== "email") return next;
-                      const oldDef = prev.purpose ? DEFAULT_EMAIL_TEMPLATES[prev.purpose] : null;
-                      const newDef = DEFAULT_EMAIL_TEMPLATES[v];
-                      if (!newDef) return next;
+                      const oldDef = prev.purpose ? getDefaultEmailTemplate(prev.purpose) : null;
+                      const newDef = getDefaultEmailTemplate(v);
+                      if (!newDef?.body) return next;
                       const wasEmpty = !String(prev.body || "").trim() && !String(prev.subject || "").trim();
                       const stillDefault =
                         oldDef &&
@@ -437,6 +420,36 @@ export default function CommunicationTemplates() {
                     ))}
                   </SelectContent>
                 </Select>
+                {(customPurposeMode || formData.purpose === CUSTOM_PURPOSE_VALUE) && !selectedTemplate && (
+                  <div className="mt-3 space-y-3 rounded-lg border p-3 bg-muted/30">
+                    <div>
+                      <Label>Custom purpose name *</Label>
+                      <Input
+                        placeholder="e.g. Delivery completed — customer"
+                        value={customPurposeLabel}
+                        onChange={(e) => {
+                          const label = e.target.value;
+                          setCustomPurposeLabel(label);
+                          if (!customPurposeSlug || customPurposeSlug === slugifyPurpose(customPurposeLabel)) {
+                            setCustomPurposeSlug(slugifyPurpose(label));
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label>Purpose key (slug)</Label>
+                      <Input
+                        className="font-mono text-sm"
+                        value={customPurposeSlug}
+                        onChange={(e) => setCustomPurposeSlug(slugifyPurpose(e.target.value))}
+                        placeholder="delivery_completed_customer"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Used in code when wiring sends. Letters, numbers, underscores only.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <Label>Channel *</Label>
@@ -547,8 +560,8 @@ export default function CommunicationTemplates() {
         title="Delete template?"
         description={
           selectedTemplate?.channel === "email"
-            ? `Delete "${purposeLabels[selectedTemplate?.purpose]}" Email template? The matching WhatsApp row for this purpose will also be removed.`
-            : `Delete the "${purposeLabels[selectedTemplate?.purpose]}" WhatsApp template?`
+            ? `Delete "${getPurposeLabel(selectedTemplate?.purpose, templates)}" Email template? The matching WhatsApp row for this purpose will also be removed.`
+            : `Delete the "${getPurposeLabel(selectedTemplate?.purpose, templates)}" WhatsApp template?`
         }
         confirmText="Delete"
         destructive

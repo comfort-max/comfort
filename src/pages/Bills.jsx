@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, ChevronDown, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, Eye, Mail, MessageSquare } from "lucide-react";
+import BillNotificationDialog from "@/components/shared/BillNotificationDialog";
 import { toast } from "sonner";
 import { format, subMonths } from "date-fns";
 import FileUploadButton from "@/components/shared/FileUploadButton";
@@ -70,7 +71,9 @@ export default function Bills() {
   const canEditBills = can("bills", "edit");
   const canExportBills = can("bills", "export");
   const canUploadBills = can("bills", "upload");
+  const canNotifyCustomer = can("bills", "bill_notify_send");
   const [showForm, setShowForm] = useState(false);
+  const [notifyContext, setNotifyContext] = useState(null);
   const [editingBill, setEditingBill] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [expandedBill, setExpandedBill] = useState(null);
@@ -166,6 +169,7 @@ export default function Bills() {
         throw new Error(`Bill number "${bn}" already exists. Choose a different number.`);
       }
 
+      const isCreate = !editingBill;
       let bill;
       if (editingBill) {
         bill = await db.Bill.update(editingBill.id, normalized);
@@ -174,19 +178,20 @@ export default function Bills() {
       } else {
         bill = await db.Bill.create(normalized);
       }
+      const billId = bill.id || editingBill?.id;
       if (items.length > 0) {
         await db.BillItem.bulkCreate(
           items.map((i) => ({
             ...i,
-            bill_id: bill.id || editingBill?.id,
+            bill_id: billId,
             bill_number: normalized.bill_number,
             delivery_status: i.delivery_status || "pending",
           }))
         );
       }
-      return bill;
+      return { bill: { ...bill, ...normalized, id: billId }, items, isCreate };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['bills-delivery'] });
       qc.invalidateQueries({ queryKey: ['bill-items'] });
       qc.invalidateQueries({ queryKey: ['bill-items-vj'] });
@@ -194,7 +199,18 @@ export default function Bills() {
       qc.invalidateQueries({ queryKey: ['bill-items-vo'] });
       qc.invalidateQueries({ queryKey: ['bill-items-delivery'] });
       setShowForm(false);
-      setEditingBill(prev => { toast.success(prev ? "Bill updated" : "Bill created"); return null; });
+      const wasCreate = result?.isCreate;
+      toast.success(wasCreate ? "Bill created" : "Bill updated");
+      setEditingBill(null);
+      if (wasCreate && canNotifyCustomer && result?.bill) {
+        const customer = customers.find((c) => c.id === result.bill.customer_id);
+        setNotifyContext({
+          bill: result.bill,
+          items: result.items || [],
+          customer,
+          initialChannel: "email",
+        });
+      }
     },
     onError: (err) => {
       toast.error(err?.message || "Could not save bill");
@@ -240,6 +256,24 @@ export default function Bills() {
     setEditingBill(bill); setShowForm(true);
   };
 
+  const getItemsForBill = (billId) => billItems.filter(i => i.bill_id === billId);
+
+  const openBillNotify = (bill, channel = "email") => {
+    const customer = customers.find((c) => c.id === bill.customer_id);
+    setNotifyContext({
+      bill,
+      items: getItemsForBill(bill.id).map((i) => ({
+        item_name: i.item_name,
+        category: i.category,
+        quantity: i.quantity,
+        rate: i.rate,
+        amount: i.amount,
+      })),
+      customer,
+      initialChannel: channel,
+    });
+  };
+
   const columns = useMemo(
     () => [
     { key: 'bill_number', header: 'Bill #', accessor: 'bill_number', sortable: true },
@@ -257,16 +291,22 @@ export default function Bills() {
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setExpandedBill(expandedBill === r.id ? null : r.id); }}>
           {expandedBill === r.id ? <ChevronDown className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </Button>
+        {canNotifyCustomer && (
+          <>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" title="Email customer" onClick={(e) => { e.stopPropagation(); openBillNotify(r, "email"); }}><Mail className="w-3.5 h-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="WhatsApp customer" onClick={(e) => { e.stopPropagation(); openBillNotify(r, "whatsapp"); }}><MessageSquare className="w-3.5 h-3.5" /></Button>
+          </>
+        )}
         {canEditBills && (
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleEdit(r); }}><Pencil className="w-3.5 h-3.5" /></Button>
         )}
       </div>
     )}
   ],
-    [companySettings, expandedBill, canEditBills]
+    [companySettings, expandedBill, canEditBills, canNotifyCustomer, customers, billItems]
   );
 
-  const getItemsForBill = (billId) => billItems.filter(i => i.bill_id === billId);
+  const expandedBillRow = expandedBill ? filteredBills.find((b) => b.id === expandedBill) : null;
 
   return (
     <div>
@@ -285,7 +325,15 @@ export default function Bills() {
 
       {expandedBill && (
         <div className="mt-2 p-4 bg-muted/30 rounded-lg border">
-          <h4 className="text-sm font-semibold mb-2">Items in Bill</h4>
+          <React.Fragment>
+            <h4 className="text-sm font-semibold mb-2">Items in Bill</h4>
+            {canNotifyCustomer && expandedBillRow ? (
+              <div className="flex gap-2 mb-2 justify-end">
+                <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => openBillNotify(expandedBillRow, "email")}><Mail className="w-3.5 h-3.5" /> Email</Button>
+                <Button size="sm" variant="outline" className="gap-1 h-8 text-green-700 border-green-300" onClick={() => openBillNotify(expandedBillRow, "whatsapp")}><MessageSquare className="w-3.5 h-3.5" /> WhatsApp</Button>
+              </div>
+            ) : null}
+          </React.Fragment>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b text-xs text-muted-foreground"><th className="text-left py-1">Item</th><th className="text-left py-1">Category</th><th className="text-right py-1">Qty</th><th className="text-right py-1">Rate</th><th className="text-right py-1">Amount</th><th className="text-left py-1">Vendor</th><th className="text-left py-1">Status</th></tr></thead>
@@ -415,6 +463,16 @@ export default function Bills() {
       </Dialog>
 
       <ConfirmModal open={!!confirmAction} onClose={() => setConfirmAction(null)} onConfirm={() => { deleteMutation.mutate(confirmAction.ids); setConfirmAction(null); }} title="Move bills to Trash" description={`Move ${confirmAction?.ids?.length || 0} bill(s) and their line items / payments to Trash? Vendor payment expense lines linked to these bills are removed from Expenses (same as before). You can restore bills from Administration → Trash Bin.`} confirmText="Move to Trash" destructive />
+
+      <BillNotificationDialog
+        open={!!notifyContext}
+        onOpenChange={(open) => !open && setNotifyContext(null)}
+        bill={notifyContext?.bill}
+        items={notifyContext?.items}
+        customer={notifyContext?.customer}
+        companySettings={companySettings[0]}
+        initialChannel={notifyContext?.initialChannel || "email"}
+      />
     </div>
   );
 }

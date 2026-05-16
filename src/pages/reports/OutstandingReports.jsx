@@ -22,6 +22,12 @@ import { buildWhatsappMeUrl } from "@/lib/whatsappLink";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getBillSalesmanDisplayName } from "@/lib/billSalesman";
 import { sortStringsForDisplay } from "@/lib/utils";
+import { useCommunicationTemplates } from "@/hooks/useCommunicationTemplates";
+import {
+  buildPaymentReminderVars,
+  getDefaultEmailTemplate,
+  resolveRenderedMessage,
+} from "@/lib/communicationTemplate";
 
 export default function OutstandingReports() {
   const qc = useQueryClient();
@@ -45,6 +51,7 @@ export default function OutstandingReports() {
   const { data: billItems = [] } = useQuery({ queryKey: ['bill-items-outstanding'], queryFn: () => db.BillItem.list('-created_date', 2000) });
   const { data: customers = [] } = useQuery({ queryKey: ['customers-all'], queryFn: () => db.Customer.list(), staleTime: 30 * 60 * 1000 });
   const { data: companySettings = [] } = useQuery({ queryKey: ['company-settings'], queryFn: () => db.CompanySettings.list() });
+  const { data: commTemplates = [] } = useCommunicationTemplates();
   const { data: reminderLogs = [] } = useQuery({ queryKey: ['reminder-logs'], queryFn: () => db.ReminderLog.filter({ reminder_type: 'payment' }) });
 
   const fyRule = useMemo(() => normalizeFinancialYearRule(companySettings[0]), [companySettings]);
@@ -175,12 +182,25 @@ export default function OutstandingReports() {
       for (const customer of selectedCustomers) {
         const customerBills = outstanding.filter(b => b.customer_id === customer.id);
         const totalDue = customerBills.reduce((s, b) => s + (b.amount_due || 0), 0);
-        const billList = customerBills.map(b => `- Bill #${b.bill_number}: ${formatCurrencyAmount(b.amount_due, settingsRow)}`).join('\n');
-        const body = `Dear ${customer.name},\n\nThis is a reminder regarding your outstanding payments.\n\nOutstanding Bills:\n${billList}\n\nTotal Outstanding: ${formatCurrencyAmount(totalDue, settingsRow)}\n\nPlease settle these dues at your earliest convenience.\n\nBest Regards,\n${companyName}`;
+        const vars = buildPaymentReminderVars({ customer, bills: customerBills, companySettings: settingsRow });
+        const fallback = getDefaultEmailTemplate("payment_reminder_customer");
+        const rendered = resolveRenderedMessage({
+          templates: commTemplates,
+          purpose: "payment_reminder_customer",
+          channel: "email",
+          vars,
+          fallbackSubject: fallback.subject,
+          fallbackBody: `Dear ${customer.name},\n\nOutstanding Bills:\n${vars.bill_list}\n\nTotal Outstanding: ${vars.total_outstanding}\n\nBest Regards,\n${companyName}`,
+        });
 
         if (channels.sendEmail && customer.email) {
           try {
-            await sendEmail({ to: customer.email, subject: 'Payment Reminder — Outstanding Bills', body, fromName: companySettings[0]?.email_from_name || companyName });
+            await sendEmail({
+              to: customer.email,
+              subject: rendered.subject || "Payment Reminder — Outstanding Bills",
+              body: rendered.body,
+              fromName: companySettings[0]?.email_from_name || companyName,
+            });
             success++;
             await db.ReminderLog.create({
               reminder_type: 'payment',
@@ -215,9 +235,16 @@ export default function OutstandingReports() {
     if (!customer) return '';
     const companyName = companySettings[0]?.company_name || 'COMFORT';
     const customerBills = outstanding.filter(b => b.customer_id === customer.id);
-    const totalDue = customerBills.reduce((s, b) => s + (b.amount_due || 0), 0);
-    const billList = customerBills.map(b => `- Bill #${b.bill_number}: ${formatCurrencyAmount(b.amount_due, settingsRow)}`).join('\n');
-    return `Dear ${customer.name},\n\nThis is a reminder regarding your outstanding payments.\n\nOutstanding Bills:\n${billList}\n\nTotal Outstanding: ${formatCurrencyAmount(totalDue, settingsRow)}\n\nPlease settle these dues at your earliest convenience.\n\nBest Regards,\n${companyName}`;
+    const vars = buildPaymentReminderVars({ customer, bills: customerBills, companySettings: settingsRow });
+    const fallback = getDefaultEmailTemplate("payment_reminder_customer");
+    return resolveRenderedMessage({
+      templates: commTemplates,
+      purpose: "payment_reminder_customer",
+      channel: "whatsapp",
+      vars,
+      fallbackSubject: "",
+      fallbackBody: fallback.body || `Dear ${customer.name},\n\nOutstanding Bills:\n${vars.bill_list}\n\nTotal: ${vars.total_outstanding}\n\nBest Regards,\n${companyName}`,
+    }).body;
   };
 
   const openWhatsappPaymentReminders = async (selectedRecipients, opts = {}) => {
