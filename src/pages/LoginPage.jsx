@@ -163,7 +163,9 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">{companyName}</CardTitle>
           <p className="text-sm font-medium text-foreground">Sign in</p>
-          <p className="text-xs text-muted-foreground">Laundry management — use email and password or a social account below.</p>
+          <p className="text-sm text-muted-foreground leading-snug max-w-xs mx-auto">
+            Laundry management — use email and password or a social account below.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
@@ -191,7 +193,7 @@ export default function LoginPage() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or email</span>
+              <span className="bg-card px-2 text-muted-foreground text-xs font-medium">Or email</span>
             </div>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -232,7 +234,7 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-sm text-muted-foreground text-center leading-relaxed">
             Invited by email? Open the link from your invitation, then set a password here or use Google / Facebook.
           </p>
         </CardContent>

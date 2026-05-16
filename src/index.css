@@ -18,7 +18,7 @@
     --secondary: 210 15% 95%;
     --secondary-foreground: 220 20% 25%;
     --muted: 210 15% 93%;
-    --muted-foreground: 220 10% 45%;
+    --muted-foreground: 220 12% 38%;
     --accent: 37 90% 55%;
     --accent-foreground: 37 90% 15%;
     --destructive: 0 72% 51%;
@@ -321,15 +321,15 @@
     --sidebar-ring: 177 100% 36%;
   }
 
-  /* Tie main UI chrome (tabs, headers, accents) to sidebar palette — lighter than the menu bar */
+  /* Tie main UI chrome (tabs, headers, accents) to sidebar palette — lighter than the menu bar.
+     Do NOT map --muted-foreground or --secondary-foreground from sidebar: those are light-on-dark
+     sidebar colors and make instructions/subtitles invisible on the main (light) content area. */
   html[data-ui-theme]:not([data-ui-theme="default"]) {
     --primary: var(--sidebar-primary);
     --primary-foreground: var(--sidebar-primary-foreground);
     --ring: var(--sidebar-ring);
     --secondary: var(--sidebar-accent);
-    --secondary-foreground: var(--sidebar-accent-foreground);
     --muted: var(--sidebar-accent);
-    --muted-foreground: var(--sidebar-foreground);
     --accent: var(--sidebar-primary);
     --accent-foreground: var(--sidebar-primary-foreground);
     --border: var(--sidebar-border);
