@@ -31,6 +31,7 @@ export default function Salary() {
   const canDeleteSalary = can("salary", "delete");
   const canSalaryGenerate = can("salary", "salary_generate");
   const canSalaryPay = can("salary", "salary_pay");
+  const { format: fmt, code: curCode } = useAppCurrency();
   const [showForm, setShowForm] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [editingId, setEditingId] = useState(null);
