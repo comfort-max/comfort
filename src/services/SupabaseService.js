@@ -376,3 +376,23 @@ export async function sendAdminInvite(payload) {
   if (!res.ok) throw new Error(json.error || 'Invite failed');
   return json;
 }
+
+/** Notify administrators to review this user's role (access denied screen). */
+export async function sendAccessRequestToAdmins() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not signed in');
+
+  const res = await fetch('/api/access-request-notify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      app_url: typeof window !== 'undefined' ? window.location.origin : '',
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Could not send access request');
+  return json;
+}

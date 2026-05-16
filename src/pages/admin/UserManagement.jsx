@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db, sendAdminInvite } from "@/services/SupabaseService";
+import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
@@ -9,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, UserPlus, Shield } from "lucide-react";
+import { Pencil, UserPlus, Shield, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import RolePermissionMatrix from "@/components/admin/RolePermissionMatrix";
@@ -21,8 +23,9 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export default function UserManagement() {
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const canInviteUsers = can("admin_users", "invite");
   const canEditUsers = can("admin_users", "edit");
   const canEditRolesMatrix = can("admin_roles", "edit");
@@ -49,6 +52,24 @@ export default function UserManagement() {
   });
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ["users"], queryFn: () => db.profiles.list() });
+
+  const { data: pendingAccessRequests = [] } = useQuery({
+    queryKey: ["user-access-requests", "pending"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_access_requests")
+        .select("*")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      if (error) {
+        if (/does not exist|schema cache/i.test(error.message || "")) return [];
+        throw error;
+      }
+      return data || [];
+    },
+    enabled: isAdmin || can("admin_users", "edit"),
+    staleTime: 30 * 1000,
+  });
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-active"],
     queryFn: () => db.Employee.filter({ status: "active" }),
@@ -144,6 +165,29 @@ export default function UserManagement() {
       ),
   });
 
+  const openEditUser = (u) => {
+    setEditForm({
+      id: u.id,
+      full_name: u.full_name || "",
+      email: u.email || "",
+      role: u.role || "user",
+      phone: u.phone || "",
+    });
+    setShowEdit(true);
+  };
+
+  useEffect(() => {
+    const userId = searchParams.get("userId");
+    if (!userId || isLoading || !canEditUsers) return;
+    const match = users.find((u) => u.id === userId);
+    if (match) {
+      openEditUser(match);
+      const next = new URLSearchParams(searchParams);
+      next.delete("userId");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, users, isLoading, canEditUsers]);
+
   const updateUserMutation = useMutation({
     mutationFn: async (data) => {
       const updates = {
@@ -155,10 +199,20 @@ export default function UserManagement() {
       }
       return db.profiles.update(data.id, updates);
     },
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
       setShowEdit(false);
       toast.success("User profile updated");
       qc.invalidateQueries({ queryKey: ["users"] });
+      try {
+        await supabase
+          .from("user_access_requests")
+          .update({ status: "approved", updated_at: new Date().toISOString() })
+          .eq("user_id", variables.id)
+          .eq("status", "pending");
+        qc.invalidateQueries({ queryKey: ["user-access-requests"] });
+      } catch (_) {
+        /* table may not exist yet */
+      }
     },
     onError: (err) => {
       toast.error(err?.message || "Failed to update user");
@@ -227,16 +281,7 @@ export default function UserManagement() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            onClick={() => {
-              setEditForm({
-                id: r.id,
-                full_name: r.full_name || "",
-                email: r.email || "",
-                role: r.role || "user",
-                phone: r.phone || "",
-              });
-              setShowEdit(true);
-            }}
+            onClick={() => openEditUser(r)}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -255,6 +300,39 @@ export default function UserManagement() {
         </Button>
         )}
       </PageHeader>
+
+      {pendingAccessRequests.length > 0 && canEditUsers && (
+        <div className="mb-4 rounded-lg border border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/30 px-4 py-3 space-y-2">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Bell className="w-4 h-4 text-amber-700" />
+            {pendingAccessRequests.length} pending access request
+            {pendingAccessRequests.length !== 1 ? "s" : ""}
+          </p>
+          <ul className="text-sm space-y-1">
+            {pendingAccessRequests.slice(0, 5).map((req) => (
+              <li key={req.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {req.full_name || req.email}{" "}
+                  <span className="text-muted-foreground">({req.email}) · role: {req.current_role || "user"}</span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => {
+                    const u = users.find((x) => x.id === req.user_id);
+                    if (u) openEditUser(u);
+                    else toast.error("User profile not found — they may need to sign in once more.");
+                  }}
+                >
+                  Review & assign role
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <DataTable columns={columns} data={users} loading={isLoading} searchPlaceholder="Search users..." />
 
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
