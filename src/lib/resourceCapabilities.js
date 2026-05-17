@@ -142,7 +142,7 @@ export const RESOURCE_CAPABILITIES = {
   admin_invitations: [
     { key: "view", label: "View", short: "View" },
     { key: "edit", label: "Manage invitations", short: "Edit", inherit: "view" },
-    { key: "delete", label: "Revoke / delete invites", short: "Del", inherit: "edit" },
+    { key: "delete", label: "Cancel / move invites to trash", short: "Del", inherit: "edit" },
   ],
   admin_trash: [
     { key: "view", label: "View trash", short: "View" },

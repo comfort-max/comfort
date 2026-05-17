@@ -75,9 +75,10 @@ export default function InstallAppPage() {
               letterClassName="text-primary-foreground font-bold text-3xl"
             />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Install COMFORT</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Install {companyName}</h1>
           <p className="text-sm text-muted-foreground">
-            Add the laundry app to your computer or phone — works like a native app, no app store required.
+            Step-by-step guide to add the app on your computer (Chrome / Edge) or phone (Android / iPhone). Works like a
+            native app — no app store required.
           </p>
         </div>
 

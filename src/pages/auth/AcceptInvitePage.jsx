@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
+import { claimInvitationProfile } from "@/lib/applyInviteProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AcceptInvitePage() {
@@ -56,27 +57,9 @@ export default function AcceptInvitePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      const { data: u } = await supabase.auth.getUser();
-      const authUser = u?.user;
-      const em = authUser?.email;
-      const invitedRole = String(authUser?.user_metadata?.role || "").trim();
-      const invitedName = String(authUser?.user_metadata?.full_name || "").trim();
-      if (authUser?.id) {
-        const role = invitedRole || "user";
-        const full_name = invitedName || (authUser.email ? authUser.email.split("@")[0] : "") || "";
-        const { error: profErr } = await supabase.from("profiles").upsert(
-          {
-            id: authUser.id,
-            email: authUser.email || em || "",
-            full_name,
-            role,
-          },
-          { onConflict: "id" }
-        );
-        if (profErr) console.warn("profiles upsert after invite:", profErr.message);
-      }
-      if (em) {
-        await supabase.from("invitations").update({ status: "accepted" }).eq("email", em).eq("status", "pending");
+      const claim = await claimInvitationProfile();
+      if (claim?.ok === false && !claim?.skipped) {
+        console.warn("claim_invitation_for_user:", claim?.error || "failed");
       }
       toast.success("Password saved. You are signed in.");
       navigate("/", { replace: true });
@@ -139,6 +122,12 @@ export default function AcceptInvitePage() {
               Back to login
             </Button>
           </form>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            <Link to="/install" className="text-primary hover:underline inline-flex items-center gap-1.5">
+              <Download className="w-4 h-4" />
+              Install app on computer or phone
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

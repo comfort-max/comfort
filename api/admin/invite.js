@@ -49,9 +49,14 @@ async function getAdminContext(accessToken) {
   return { admin, user };
 }
 
-async function sendInviteSmtp({ to, companyName, senderName, inviteLink }) {
+async function sendInviteSmtp({ to, companyName, senderName, inviteLink, installUrl }) {
   const transporter = createTransporter();
-  const { subject, text, html } = buildInviteEmailContent({ companyName, senderName, inviteLink });
+  const { subject, text, html } = buildInviteEmailContent({
+    companyName,
+    senderName,
+    inviteLink,
+    installUrl: installUrl || "",
+  });
   const fromLabel = senderName || process.env.EMAIL_FROM_NAME || companyName;
   const fromEmail = process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_USER;
   if (!fromEmail || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -129,6 +134,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "email and role_name are required (or invitation_id for resend)" });
     }
 
+    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    if (invitationId) {
+      await ctx.admin
+        .from("invitations")
+        .update({ expires_at, status: "pending", role, invited_name: name, employee_id: empId })
+        .eq("id", invitationId);
+    } else {
+      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
+      await ctx.admin.from("invitations").insert({
+        email: targetEmail,
+        role,
+        status: "pending",
+        invited_by: invitedBy || "",
+        expires_at,
+        employee_id: empId,
+        invited_name: name,
+      });
+    }
+
     const { data: linkData, error: genError } = await ctx.admin.auth.admin.generateLink({
       type: "invite",
       email: targetEmail,
@@ -152,26 +177,20 @@ export default async function handler(req, res) {
       companyName,
       senderName,
       inviteLink: actionLink,
+      installUrl: origin ? `${origin}/install` : "",
     });
 
-    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    if (invitationId) {
-      await ctx.admin
-        .from("invitations")
-        .update({ expires_at, status: "pending" })
-        .eq("id", invitationId);
-    } else {
-      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
-      await ctx.admin.from("invitations").insert({
-        email: targetEmail,
-        role,
-        status: "pending",
-        invited_by: invitedBy || "",
-        expires_at,
-        employee_id: empId,
-        invited_name: name,
-      });
+    const invitedUserId = linkData?.user?.id;
+    if (invitedUserId) {
+      await ctx.admin.from("profiles").upsert(
+        {
+          id: invitedUserId,
+          email: targetEmail,
+          full_name: name || targetEmail.split("@")[0],
+          role,
+        },
+        { onConflict: "id" }
+      );
     }
 
     return res.status(200).json({ success: true, email: targetEmail });

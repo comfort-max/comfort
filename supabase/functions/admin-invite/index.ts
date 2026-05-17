@@ -19,26 +19,62 @@ function escapeAttr(s: string) {
   return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
+function buildInstallInstructionsText(installUrl: string) {
+  if (!installUrl) return "";
+  return `
+
+INSTALL THE APP (computer & phone)
+--------------------------------
+After you create your account, install COMFORT for quick access:
+
+Computer (Chrome or Microsoft Edge):
+1. Open ${installUrl}
+2. Sign in, then click Install or use the install icon in the address bar
+
+Android phone:
+1. Open ${installUrl} in Chrome
+2. Sign in, tap menu → Install app or Add to Home screen
+
+iPhone (Safari required):
+1. Open ${installUrl} in Safari
+2. Sign in, tap Share → Add to Home Screen
+`;
+}
+
+function buildInstallInstructionsHtml(installUrl: string) {
+  if (!installUrl) return "";
+  return `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+<h3 style="font-size:15px;margin:0 0 12px;color:#111;">Install on your computer &amp; phone</h3>
+<p style="margin:0 0 12px;">After you create your account, install the app for quick access:</p>
+<p style="margin:0 0 8px;"><strong>Computer (Chrome / Edge):</strong> Open <a href="${escapeAttr(installUrl)}">${escapeHtml(installUrl)}</a>, sign in, then use <strong>Install</strong> or the install icon in the address bar.</p>
+<p style="margin:0 0 8px;"><strong>Android:</strong> Open the link in Chrome → menu (⋮) → <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>
+<p style="margin:0;"><strong>iPhone:</strong> Open the link in <strong>Safari</strong> → <strong>Share</strong> → <strong>Add to Home Screen</strong>.</p>`;
+}
+
 function buildInviteEmailContent(opts: {
   companyName?: string;
   senderName?: string;
   inviteLink: string;
+  installUrl?: string;
 }) {
   const companyName = opts.companyName || "COMFORT";
   const senderName = opts.senderName || "COMFORT";
   const inviteLink = opts.inviteLink;
+  const installUrl = opts.installUrl || "";
+  const installText = buildInstallInstructionsText(installUrl);
   const subject = `${companyName} — Create your login`;
   const text =
     `As an employee of ${companyName}, please follow the link to create your own login to the company system. Please set your password or you may use login with your Google or Facebook account.
 
 ${inviteLink}
-
+${installText}
 — ${senderName}`;
   const html = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.7;">
 <p>As an employee of <strong>${escapeHtml(companyName)}</strong>, please follow the link below to create your own login to the company system.</p>
 <p>Please set your password, or you may use <strong>Login with Google</strong> or <strong>Facebook</strong>.</p>
 <p><a href="${escapeAttr(inviteLink)}">Create your account</a></p>
 <p style="word-break: break-all; font-size: 12px; color: #666;">${escapeHtml(inviteLink)}</p>
+${buildInstallInstructionsHtml(installUrl)}
 <p>— ${escapeHtml(senderName)}</p>
 </div>`;
   return { subject, text, html };
@@ -136,6 +172,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    if (invitationId) {
+      await ctx.admin
+        .from("invitations")
+        .update({ expires_at, status: "pending", role, invited_name: name, employee_id: empId })
+        .eq("id", invitationId);
+    } else {
+      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
+      await ctx.admin.from("invitations").insert({
+        email: targetEmail,
+        role,
+        status: "pending",
+        invited_by: invitedBy,
+        expires_at,
+        employee_id: empId,
+        invited_name: name,
+      });
+    }
+
     const { data: linkData, error: genError } = await ctx.admin.auth.admin.generateLink({
       type: "invite",
       email: targetEmail,
@@ -154,29 +210,27 @@ Deno.serve(async (req) => {
       return Response.json({ error: "No invite link from Supabase" }, { status: 500, headers: cors });
     }
 
+    const installUrl = appUrl ? `${appUrl}/install` : "";
     const { subject, text, html } = buildInviteEmailContent({
       companyName,
       senderName,
       inviteLink: actionLink,
+      installUrl,
     });
     const fromLabel = senderName || Deno.env.get("EMAIL_FROM_NAME") || companyName;
     await sendViaSMTP(targetEmail, subject, text, fromLabel, null, null, { html });
 
-    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    if (invitationId) {
-      await ctx.admin.from("invitations").update({ expires_at, status: "pending" }).eq("id", invitationId);
-    } else {
-      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
-      await ctx.admin.from("invitations").insert({
-        email: targetEmail,
-        role,
-        status: "pending",
-        invited_by: invitedBy,
-        expires_at,
-        employee_id: empId,
-        invited_name: name,
-      });
+    const invitedUserId = linkData?.user?.id;
+    if (invitedUserId) {
+      await ctx.admin.from("profiles").upsert(
+        {
+          id: invitedUserId,
+          email: targetEmail,
+          full_name: name || targetEmail.split("@")[0],
+          role,
+        },
+        { onConflict: "id" },
+      );
     }
 
     return Response.json({ success: true, email: targetEmail }, { headers: cors });

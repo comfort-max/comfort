@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
 import { completeAuthCallbackFromUrl, getAuthCallbackFromUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
+import { claimInvitationProfile } from '@/lib/applyInviteProfile';
 
 const AuthContext = createContext(null);
 
@@ -116,6 +117,11 @@ export function AuthProvider({ children }) {
     }
 
     if (!data) {
+      const claim = await claimInvitationProfile().catch(() => ({ skipped: true }));
+      if (claim?.ok) {
+        await loadProfile(sessionUser);
+        return;
+      }
       setUser({
         id: sessionUser.id,
         email: sessionUser.email,
@@ -128,6 +134,13 @@ export function AuthProvider({ children }) {
     }
 
     const profileRole = data.role != null ? String(data.role).trim() : '';
+    if (profileRole.toLowerCase() === 'user') {
+      const claim = await claimInvitationProfile().catch(() => ({ skipped: true }));
+      if (claim?.ok && claim.role && String(claim.role).toLowerCase() !== 'user') {
+        await loadProfile(sessionUser);
+        return;
+      }
+    }
     const metaRoleTrim = metaRole != null ? String(metaRole).trim() : '';
     const role =
       metaRoleTrim && (!profileRole || profileRole.toLowerCase() === 'user')

@@ -7,6 +7,7 @@ import {
   supabaseGoogleExchangeFailedMessage,
   pkceVerifierMissingMessage,
 } from "@/lib/authCallback";
+import { claimInvitationProfile } from "@/lib/applyInviteProfile";
 import { Loader2 } from "lucide-react";
 
 const AUTH_ERROR_KEY = "comfort_auth_error";
@@ -81,6 +82,7 @@ export default function AuthCallbackPage() {
 
           sessionStorage.setItem(guardKey, "done");
           clearAuthCallbackFromUrl();
+          await claimInvitationProfile().catch(() => {});
           window.location.replace("/");
           return;
         }
@@ -92,6 +94,7 @@ export default function AuthCallbackPage() {
           });
           if (error) throw error;
           clearAuthCallbackFromUrl();
+          await claimInvitationProfile().catch(() => {});
           window.location.replace("/");
           return;
         }

@@ -31,6 +31,7 @@ const ENTITY_TABLES = {
   VendorOrder: ["vendor_orders", "vendor_order"],
   VendorRate: ["vendor_rates", "vendor_rate"],
   RateListItem: ["rate_list_items", "rate_list_item"],
+  Invitation: ["invitations", "invitation"],
 };
 
 function stripRestoreRow(row) {
@@ -105,6 +106,7 @@ export default function TrashBin() {
     qc.invalidateQueries({ queryKey: ["employees-active"] });
     qc.invalidateQueries({ queryKey: ["vendors-all"] });
     qc.invalidateQueries({ queryKey: ["rate-list"] });
+    qc.invalidateQueries({ queryKey: ["invitations"] });
     invalidateAfterCustomerPaymentRecorded(qc);
   };
 

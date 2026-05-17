@@ -5,7 +5,7 @@ import {
   Wallet, Truck, ClipboardList, BarChart3, Receipt, AlertTriangle,
   BookOpen, TrendingUp, Settings, Shield, Trash2,
   ChevronDown, ChevronRight, Package, UserPlus, Tag, ListChecks,
-  Percent, FolderOpen, Menu, X, Building2, Mail, Zap, LogOut,
+  Percent, FolderOpen, Menu, X, Building2, Mail, Zap, LogOut, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCompanyBranding } from "@/hooks/useCompanyBranding";
@@ -213,6 +213,19 @@ export default function Sidebar({ collapsed, setCollapsed }) {
             ) : null}
           </p>
         )}
+        <a
+          href="/install"
+          target="_blank"
+          rel="noreferrer"
+          title="Install app"
+          className={cn(
+            "flex items-center gap-3 rounded-lg text-[13px] font-medium transition-all text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed ? "w-full justify-center p-2.5" : "w-full px-3 py-2.5"
+          )}
+        >
+          <Download className="w-4 h-4 shrink-0" />
+          {!collapsed && "Install app"}
+        </a>
         <button
           type="button"
           title="Log out"
