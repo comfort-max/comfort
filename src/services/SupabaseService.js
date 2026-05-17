@@ -163,6 +163,55 @@ function createEntityService(tableName, fallbackTableName = null) {
   };
 }
 
+/** company_settings: retry update without unknown columns; surface clear error if display_currency_code is missing in DB. */
+function createCompanySettingsService() {
+  const inner = createEntityService("company_settings");
+
+  async function update(id, updates) {
+    let payload = { ...updates };
+    const maxAttempts = Object.keys(payload).length + 1;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const { data, error } = await supabase
+        .from("company_settings")
+        .update(payload)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!error) return data;
+      if (!isMissingColumnError(error)) throw error;
+
+      const msg = String(error.message || "");
+      const colMatch =
+        msg.match(/'([^']+)'\s+column/i) ||
+        msg.match(/Could not find the '([^']+)' column/i) ||
+        msg.match(/columns?:\s*([a-z_]+)/i);
+      const missingCol = colMatch?.[1];
+
+      if (!missingCol || !Object.prototype.hasOwnProperty.call(payload, missingCol)) {
+        throw error;
+      }
+      if (missingCol === "display_currency_code") {
+        throw new Error(
+          "Display currency could not be saved. In Supabase SQL Editor, run the migration " +
+            "supabase/migrations/20260515120000_company_settings_ensure_columns.sql, then save again."
+        );
+      }
+
+      const { [missingCol]: _removed, ...rest } = payload;
+      payload = rest;
+    }
+
+    throw new Error("Could not save company settings");
+  }
+
+  return {
+    ...inner,
+    update,
+  };
+}
+
 /** payment_collection (singular) may lack columns present on payment_collections; retry without salesman_name. */
 function createPaymentCollectionService() {
   const inner = createEntityService('payment_collections', 'payment_collection');
@@ -212,7 +261,7 @@ export const db = {
   SalaryRecord:        createEntityService('salary_records', 'salary_record'),
   IncentiveSlab:       createEntityService('incentive_slabs', 'incentive_slab'),
   RateListItem:        createEntityService('rate_list_items', 'rate_list_item'),
-  CompanySettings:     createEntityService('company_settings'),
+  CompanySettings:     createCompanySettingsService(),
   PaymentMethod:       createEntityService('payment_methods', 'payment_method'),
   AppRole:             createEntityService('app_roles', 'app_role'),
   ReminderLog:         createEntityService('reminder_logs', 'reminder_log'),

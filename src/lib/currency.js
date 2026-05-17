@@ -4,6 +4,7 @@
  */
 
 import { localeDisplayCompare } from "./utils";
+import { normalizeCompanySettingsRow } from "./companySettingsPayload";
 
 /** @typedef {{ code: string, label: string, symbol: string, locale: string, pdfPrefix: string }} CurrencyOption */
 
@@ -42,8 +43,8 @@ const BY_CODE = Object.fromEntries(CURRENCY_OPTIONS.map((o) => [o.code, o]));
  * @returns {CurrencyOption}
  */
 export function getCurrencyConfig(settings) {
-  const raw = (settings && settings.display_currency_code) || "INR";
-  const code = String(raw).trim().toUpperCase();
+  const row = normalizeCompanySettingsRow(settings);
+  const code = String(row.display_currency_code || "INR").trim().toUpperCase();
   return BY_CODE[code] || BY_CODE.INR;
 }
 

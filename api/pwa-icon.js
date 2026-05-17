@@ -44,12 +44,20 @@ export default async function handler(req, res) {
       }
       const png = await pipeline.png().toBuffer();
       res.setHeader("Content-Type", "image/png");
-      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+      const cacheBust = req.query?.v != null && String(req.query.v) !== "";
+      res.setHeader(
+        "Cache-Control",
+        cacheBust ? "public, max-age=300" : "public, max-age=86400, s-maxage=86400"
+      );
       return res.status(200).send(png);
     }
 
     res.setHeader("Content-Type", image.mime || "image/png");
-    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+    const cacheBust = req.query?.v != null && String(req.query.v) !== "";
+    res.setHeader(
+      "Cache-Control",
+      cacheBust ? "public, max-age=300" : "public, max-age=86400, s-maxage=86400"
+    );
     return res.status(200).send(image.buffer);
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Icon failed" });

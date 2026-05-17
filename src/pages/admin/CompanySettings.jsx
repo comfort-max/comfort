@@ -11,13 +11,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Upload, Building2, Phone, Plus, Trash2, Pencil, Globe2, Palette } from "lucide-react";
 import { UI_THEME_PRESETS, normalizeUiThemePreset } from "@/lib/uiThemePresets";
-import { pickCompanySettingsPersistPayload } from "@/lib/companySettingsPayload";
+import {
+  normalizeCompanySettingsRow,
+  pickCompanySettingsPersistPayload,
+} from "@/lib/companySettingsPayload";
 import { CURRENCY_OPTIONS } from "@/lib/currency";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { sortByLocaleKey } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { applyDynamicAppIcons } from "@/lib/appIcons";
 
 export default function CompanySettings() {
   const qc = useQueryClient();
@@ -140,14 +144,23 @@ export default function CompanySettings() {
       const payload = pickCompanySettingsPersistPayload(data, row ?? null);
       return row ? db.CompanySettings.update(row.id, payload) : db.CompanySettings.create(payload);
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, formData) => {
       unsavedLogoRef.current = false;
       themeDirtyRef.current = false;
-      if (saved) {
-        qc.setQueryData(["company-settings"], [saved]);
-        serverRowRef.current = { ...saved };
-      }
-      qc.invalidateQueries({ queryKey: ["company-settings"] });
+      const merged = normalizeCompanySettingsRow({
+        ...(settings[0] || {}),
+        ...(saved || {}),
+        display_currency_code: formData?.display_currency_code,
+        ui_theme_preset: formData?.ui_theme_preset,
+      });
+      qc.setQueryData(["company-settings"], [merged]);
+      serverRowRef.current = { ...merged };
+      qc.invalidateQueries({ queryKey: ["company-settings"], refetchType: "active" });
+      applyDynamicAppIcons({
+        logoSrc: merged.logo_url,
+        companyName: merged.company_name,
+        cacheBust: true,
+      });
       toast.success("Settings saved");
     },
     onError: (err) => {

@@ -49,6 +49,7 @@ const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'));
 import { useCompanyBranding } from '@/hooks/useCompanyBranding';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { CompanyLogoMark } from '@/components/shared/CompanyLogoMark';
+import DynamicAppIcons from '@/components/shared/DynamicAppIcons';
 
 function AppThemeSync() {
   useAppTheme();
@@ -132,6 +133,7 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
+        <DynamicAppIcons />
         <GlobalActionProgressBar />
         <AppThemeSync />
         <Router>
