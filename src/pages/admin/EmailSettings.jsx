@@ -8,9 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function EmailSettings() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
+  const canEditEmailSettings = can("admin_email_settings", "edit");
+  const canSendTestEmail = can("admin_email_settings", "test_send");
   const [fromName, setFromName] = useState('');
   const [savingFromName, setSavingFromName] = useState(false);
   const [testEmail, setTestEmail] = useState('');
@@ -24,6 +28,7 @@ export default function EmailSettings() {
   }, [companySettingsList]);
 
   const handleSaveFromName = async () => {
+    if (!canEditEmailSettings) return;
     setSavingFromName(true);
     const settings = companySettingsList[0];
     if (settings) await db.CompanySettings.update(settings.id, { email_from_name: fromName });
@@ -34,6 +39,7 @@ export default function EmailSettings() {
   };
 
   const handleSendTest = async () => {
+    if (!canSendTestEmail) return;
     if (!testEmail) { toast.error("Enter an email address"); return; }
     setSendingTest(true);
     try {
@@ -63,7 +69,7 @@ export default function EmailSettings() {
 
   return (
     <div>
-      <PageHeader title="Email Settings" subtitle="Configure email sending via SMTP" />
+      <PageHeader title="Email Settings" subtitle="Configure email sending via SMTP" permissionResource="admin_email_settings" />
       <div className="space-y-6 max-w-2xl">
         <Card className="border-0 shadow-sm">
           <CardHeader>
@@ -96,8 +102,8 @@ SUPABASE_ANON_KEY=...`}</code>
           <CardHeader><CardTitle className="text-sm">Email From Name</CardTitle><CardDescription>Display name recipients see in their inbox.</CardDescription></CardHeader>
           <CardContent>
             <div className="flex gap-3 items-end">
-              <div className="flex-1"><Label className="text-sm mb-1.5 block">From Name</Label><Input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="e.g. COMFORT Laundry" /></div>
-              <Button onClick={handleSaveFromName} disabled={savingFromName}>{savingFromName ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}</Button>
+              <div className="flex-1"><Label className="text-sm mb-1.5 block">From Name</Label><Input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="e.g. COMFORT Laundry" disabled={!canEditEmailSettings} /></div>
+              <Button onClick={handleSaveFromName} disabled={!canEditEmailSettings || savingFromName}>{savingFromName ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}</Button>
             </div>
           </CardContent>
         </Card>
@@ -106,8 +112,8 @@ SUPABASE_ANON_KEY=...`}</code>
           <CardHeader><CardTitle className="text-sm">Send Test Email</CardTitle><CardDescription>Verify your email server is working correctly.</CardDescription></CardHeader>
           <CardContent>
             <div className="flex gap-3 items-end">
-              <div className="flex-1"><Label className="text-sm mb-1.5 block">Send test to</Label><Input value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="test@example.com" type="email" /></div>
-              <Button onClick={handleSendTest} disabled={sendingTest}>{sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Test'}</Button>
+              <div className="flex-1"><Label className="text-sm mb-1.5 block">Send test to</Label><Input value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="test@example.com" type="email" disabled={!canSendTestEmail} /></div>
+              <Button onClick={handleSendTest} disabled={!canSendTestEmail || sendingTest}>{sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Test'}</Button>
             </div>
           </CardContent>
         </Card>

@@ -136,7 +136,7 @@ export default function RoleManagement() {
 
   return (
     <div>
-      <PageHeader title="Role Management" subtitle="Define roles, then use the matrix to set capabilities (view, edit, export, payments, POs, reminders, and more) per module" permissionResource="admin_roles">
+      <PageHeader title="Role Management" subtitle="Define roles, then use the matrix for capabilities per module — uploads, bill/customer notifications, email templates, test email, PO send, reminders, payments, and more" permissionResource="admin_roles">
         {canEditRoles && (
         <Button
           size="sm"

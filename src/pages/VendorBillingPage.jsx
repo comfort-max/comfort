@@ -33,6 +33,7 @@ export default function VendorBillingPage() {
   const canDeleteVendorBilling = can("vendor_billing", "delete");
   const canEditVendorBilling = can("vendor_billing", "edit");
   const canVendorPayment = can("vendor_billing", "vendor_payment");
+  const canUploadVendorProof = can("vendor_billing", "upload");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [dateFrom, setDateFrom] = useState('');
@@ -210,7 +211,16 @@ export default function VendorBillingPage() {
               <div><Label>Amount ({curCode}) *</Label><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} /></div>
               <div><Label>Bill Numbers</Label><Input value={form.bill_numbers} onChange={e => setForm({ ...form, bill_numbers: e.target.value })} placeholder="e.g. 5890, 5891" /></div>
             </div>
-            {companySettings[0]?.enable_vendor_payment_proof && <div><Label>Payment Proof</Label><FileUploadButton fileUrl={form.payment_proof_url} onFileUpload={(url) => setForm({ ...form, payment_proof_url: url })} onFileDelete={() => setForm({ ...form, payment_proof_url: '' })} label="Upload Proof" /></div>}
+            {companySettings[0]?.enable_vendor_payment_proof && (
+              <div>
+                <Label>Payment Proof</Label>
+                {canUploadVendorProof ? (
+                  <FileUploadButton fileUrl={form.payment_proof_url} onFileUpload={(url) => setForm({ ...form, payment_proof_url: url })} onFileDelete={() => setForm({ ...form, payment_proof_url: '' })} label="Upload Proof" />
+                ) : (
+                  <p className="text-xs text-muted-foreground py-1">Payment proof upload is not allowed for your role.</p>
+                )}
+              </div>
+            )}
             <div><Label>Remarks</Label><Input value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} /></div>
           </div>
           <DialogFooter>

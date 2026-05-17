@@ -17,9 +17,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { sortByLocaleKey } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function CompanySettings() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
+  const canEditCompany = can("admin_company_settings", "edit");
+  const canUploadLogo = can("admin_company_settings", "upload");
+  const canDeleteCompanyItems = can("admin_company_settings", "delete");
   const { data: settings = [] } = useQuery({ queryKey: ["company-settings"], queryFn: () => db.CompanySettings.list() });
   const paymentMethodsQuery = usePaymentMethodsQuery();
   const paymentMethods = paymentMethodsQuery.data ?? [];
@@ -154,6 +159,7 @@ export default function CompanySettings() {
   });
 
   const handleLogoUpload = async (e) => {
+    if (!canUploadLogo) return;
     const file = e.target.files[0];
     if (!file) return;
     const blobPreview = URL.createObjectURL(file);
@@ -218,7 +224,7 @@ export default function CompanySettings() {
 
   return (
     <div>
-      <PageHeader title="Company Settings" subtitle="Configure your business details" />
+      <PageHeader title="Company Settings" subtitle="Configure your business details" permissionResource="admin_company_settings" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Building2 className="w-4 h-4" /> Company Details</CardTitle></CardHeader>
@@ -234,7 +240,11 @@ export default function CompanySettings() {
                     className="w-16 h-16 object-contain rounded-lg border bg-muted/30"
                   />
                 )}
-                <label className="cursor-pointer"><input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" /><Button variant="outline" size="sm" asChild><span><Upload className="w-3.5 h-3.5 mr-1" /> Upload Logo</span></Button></label>
+                {canUploadLogo ? (
+                  <label className="cursor-pointer"><input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" /><Button variant="outline" size="sm" asChild><span><Upload className="w-3.5 h-3.5 mr-1" /> Upload Logo</span></Button></label>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Logo upload is not allowed for your role.</p>
+                )}
               </div>
             </div>
             <div><Label>Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
@@ -451,7 +461,7 @@ export default function CompanySettings() {
         </Card>
       </div>
 
-      <div className="mt-6"><Button onClick={() => saveMutation.mutate(form)} className="gap-2"><Save className="w-4 h-4" /> Save Settings</Button></div>
+      <div className="mt-6"><Button onClick={() => saveMutation.mutate(form)} className="gap-2" disabled={!canEditCompany}><Save className="w-4 h-4" /> Save Settings</Button></div>
 
       <Dialog open={paymentMethodDialog} onOpenChange={setPaymentMethodDialog}>
         <DialogContent className="max-w-sm">

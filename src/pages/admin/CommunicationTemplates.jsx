@@ -53,6 +53,7 @@ function insertTokenInTextarea(textarea, currentValue, token, setValue) {
 export default function CommunicationTemplates() {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
+  const canEditTemplates = can("admin_communication_templates", "edit");
   const canDeleteTemplates = can("admin_communication_templates", "delete");
   const bodyRef = useRef(null);
   const [formDialog, setFormDialog] = useState(false);
@@ -187,6 +188,7 @@ export default function CommunicationTemplates() {
   });
 
   const handleOpenForm = (template = null) => {
+    if (!canEditTemplates) return;
     if (template) {
       setSelectedTemplate(template);
       setFormData({
@@ -211,6 +213,7 @@ export default function CommunicationTemplates() {
   };
 
   const handleSubmit = () => {
+    if (!canEditTemplates) return;
     if (!formData.purpose && !customPurposeMode) {
       toast.error("Purpose is required");
       return;
@@ -283,9 +286,11 @@ export default function CommunicationTemplates() {
           <Button size="sm" variant="outline" className="gap-1" onClick={() => setPreviewTemplate(t)}>
             <Eye className="w-3 h-3" /> View
           </Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => handleOpenForm(t)}>
-            <Edit2 className="w-3 h-3" /> Edit
-          </Button>
+          {canEditTemplates && (
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => handleOpenForm(t)}>
+              <Edit2 className="w-3 h-3" /> Edit
+            </Button>
+          )}
           {canDeleteTemplates && (
             <Button
               size="sm"
@@ -306,10 +311,16 @@ export default function CommunicationTemplates() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Communication Templates" subtitle="Manage email & WhatsApp templates">
-        <Button onClick={() => handleOpenForm()} className="gap-2">
-          <Plus className="w-4 h-4" /> New Template
-        </Button>
+      <PageHeader
+        title="Communication Templates"
+        subtitle="Manage email & WhatsApp templates"
+        permissionResource="admin_communication_templates"
+      >
+        {canEditTemplates && (
+          <Button onClick={() => handleOpenForm()} className="gap-2">
+            <Plus className="w-4 h-4" /> New Template
+          </Button>
+        )}
       </PageHeader>
 
       <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground space-y-2 max-w-3xl">
@@ -353,15 +364,17 @@ export default function CommunicationTemplates() {
                 <Button variant="outline" onClick={() => setPreviewTemplate(null)}>
                   Close
                 </Button>
-                <Button
-                  onClick={() => {
-                    const t = previewTemplate;
-                    setPreviewTemplate(null);
-                    handleOpenForm(t);
-                  }}
-                >
-                  Edit this template
-                </Button>
+                {canEditTemplates && (
+                  <Button
+                    onClick={() => {
+                      const t = previewTemplate;
+                      setPreviewTemplate(null);
+                      handleOpenForm(t);
+                    }}
+                  >
+                    Edit this template
+                  </Button>
+                )}
               </DialogFooter>
             </>
           )}
@@ -546,7 +559,7 @@ export default function CommunicationTemplates() {
             <Button variant="outline" onClick={() => setFormDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending}>
+            <Button onClick={handleSubmit} disabled={!canEditTemplates || saveMutation.isPending}>
               {selectedTemplate ? "Update" : "Create"}
             </Button>
           </DialogFooter>

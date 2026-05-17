@@ -62,6 +62,7 @@ export const RESOURCE_CAPABILITIES = {
     { key: "edit", label: "Add / edit billing entries", short: "Edit" },
     { key: "delete", label: "Move entries to trash", short: "Del", inherit: "edit" },
     { key: "export", label: "Export / print", short: "Export", inherit: "view" },
+    { key: "upload", label: "Upload payment proof / files", short: "Upload", inherit: "edit" },
     { key: "vendor_payment", label: "Record vendor payment (Pay / bulk pay)", short: "Pay", inherit: "edit" },
   ],
 
@@ -192,7 +193,8 @@ export const RESOURCE_CAPABILITIES = {
   ],
   admin_email_settings: [
     { key: "view", label: "View", short: "View" },
-    { key: "edit", label: "Edit SMTP settings", short: "Edit", inherit: "view" },
+    { key: "edit", label: "Edit from name / display settings", short: "Edit", inherit: "view" },
+    { key: "test_send", label: "Send test email", short: "Test", inherit: "edit" },
   ],
   admin_data_optimization: [
     { key: "view", label: "View", short: "View" },
@@ -242,6 +244,8 @@ export const MATRIX_CAPABILITY_ORDER = [
   "salary_pay",
   "invite",
   "margin_detail",
+  "bill_notify_send",
+  "test_send",
 ];
 
 const CAPABILITY_LABELS = {
@@ -265,6 +269,8 @@ const CAPABILITY_LABELS = {
   salary_pay: "Pay salary",
   invite: "Invite",
   margin_detail: "Margin",
+  bill_notify_send: "Bill notify",
+  test_send: "Test email",
 };
 
 /** @param {string} resourceKey */

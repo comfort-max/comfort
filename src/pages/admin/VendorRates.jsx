@@ -52,7 +52,10 @@ export default function VendorRates() {
   const dialogFileRef = useRef(null);
   const { format: fmt, code: curCode } = useAppCurrency();
   const { can } = usePermissions();
+  const canEditVendorRates = can("admin_vendor_rates", "edit");
   const canDeleteVendorRates = can("admin_vendor_rates", "delete");
+  const canExportVendorRates = can("admin_vendor_rates", "export");
+  const canImportVendorRates = can("admin_vendor_rates", "import");
   const [selectedVendor, setSelectedVendor] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -239,22 +242,25 @@ export default function VendorRates() {
 
   return (
     <div>
-      <PageHeader title="Vendor Rates" subtitle="Manage rate lists for each vendor">
+      <PageHeader title="Vendor Rates" subtitle="Manage rate lists for each vendor" permissionResource="admin_vendor_rates">
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={downloadVendorRateBlankCsvTemplate}
-            title="Download blank CSV template (headings only)"
-          >
-            <Download className="w-4 h-4" />
-            Template
-          </Button>
+          {canExportVendorRates && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={downloadVendorRateBlankCsvTemplate}
+              title="Download blank CSV template (headings only)"
+            >
+              <Download className="w-4 h-4" />
+              Template
+            </Button>
+          )}
 
           {selectedVendor ? (
             <>
+              {canExportVendorRates && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled={exportDisabled}>
@@ -271,27 +277,33 @@ export default function VendorRates() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              )}
 
-              <input
-                ref={uploadSelectedRef}
-                type="file"
-                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                className="hidden"
-                disabled={importing}
-                onChange={handleUploadSelectedVendor}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={importing}
-                onClick={() => uploadSelectedRef.current?.click()}
-              >
-                <Upload className="w-4 h-4" />
-                Upload rate list
-              </Button>
+              {canImportVendorRates && (
+                <>
+                  <input
+                    ref={uploadSelectedRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    className="hidden"
+                    disabled={importing}
+                    onChange={handleUploadSelectedVendor}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={importing}
+                    onClick={() => uploadSelectedRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload rate list
+                  </Button>
+                </>
+              )}
 
+              {canEditVendorRates && (
               <Button
                 size="sm"
                 className="gap-1"
@@ -303,12 +315,15 @@ export default function VendorRates() {
               >
                 <Plus className="w-4 h-4" /> Add rate
               </Button>
+              )}
             </>
           ) : (
+            canImportVendorRates && (
             <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={openGlobalUploadDialog} disabled={importing}>
               <Upload className="w-4 h-4" />
               Upload rate list
             </Button>
+            )
           )}
         </div>
       </PageHeader>
@@ -363,6 +378,7 @@ export default function VendorRates() {
                           <td className="py-1.5 text-right font-medium">{fmt(r.price || 0)}</td>
                           <td className="py-1.5">
                             <div className="flex gap-1 justify-end">
+                              {canEditVendorRates && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -375,6 +391,7 @@ export default function VendorRates() {
                               >
                                 <Pencil className="w-3 h-3" />
                               </Button>
+                              )}
                               {canDeleteVendorRates && (
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
                                   <Trash2 className="w-3 h-3" />
@@ -477,7 +494,7 @@ export default function VendorRates() {
             <Button variant="outline" onClick={() => setShowForm(false)}>
               Cancel
             </Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.item_name?.trim() || !form.category?.trim()}>
+            <Button onClick={() => saveMutation.mutate(form)} disabled={!canEditVendorRates || !form.item_name?.trim() || !form.category?.trim()}>
               Save
             </Button>
           </DialogFooter>

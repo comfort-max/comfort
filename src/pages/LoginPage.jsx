@@ -19,6 +19,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
+import { GoogleIcon, YahooIcon } from "@/components/icons/OAuthBrandIcons";
 
 const RESET_EMAIL_COOLDOWN_MS = 90_000;
 
@@ -172,23 +173,30 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
-            {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => (
-              <Button
-                key={key}
-                type="button"
-                variant="outline"
-                className="w-full"
-                title={`Sign in with ${label}`}
-                disabled={!!oauthLoading}
-                onClick={() => oauth(provider, key)}
-              >
-                {oauthLoading === key ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  label
-                )}
-              </Button>
-            ))}
+            {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => {
+              const BrandIcon = key === "google" ? GoogleIcon : YahooIcon;
+              return (
+                <Button
+                  key={key}
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2 font-medium shadow-sm hover:bg-muted/50"
+                  title={`Sign in with ${label}`}
+                  aria-label={`Sign in with ${label}`}
+                  disabled={!!oauthLoading}
+                  onClick={() => oauth(provider, key)}
+                >
+                  {oauthLoading === key ? (
+                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  ) : (
+                    <>
+                      <BrandIcon />
+                      <span>{label}</span>
+                    </>
+                  )}
+                </Button>
+              );
+            })}
           </div>
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
