@@ -195,7 +195,7 @@ export default function LoginPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 [&>*]:min-w-0">
             {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => {
               if (key === "google") {
                 return (
