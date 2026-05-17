@@ -159,6 +159,7 @@ export default function UserManagement() {
       setInviteForm({ employee_id: "", email: "", full_name: "", role_name: inviteRoleDefault });
       toast.success("Invitation email sent");
       qc.invalidateQueries({ queryKey: ["invitations"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (err) =>
       toast.error(

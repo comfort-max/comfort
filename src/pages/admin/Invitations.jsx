@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { db, sendAdminInvite } from "@/services/SupabaseService";
+import { listInvitations } from "@/lib/listInvitations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
@@ -29,12 +30,16 @@ export default function Invitations() {
   const [confirmTrash, setConfirmTrash] = useState(null);
   const [progress, setProgress] = useState({ open: false, current: 0, total: 0 });
 
-  const { data: invitations = [], isLoading } = useQuery({
+  const { data: invitations = [], isLoading, isError, error } = useQuery({
     queryKey: ["invitations"],
-    queryFn: () => db.Invitation.list("-created_date", 500),
+    queryFn: listInvitations,
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (isError) toast.error(error?.message || "Could not load invitations");
+  }, [isError, error]);
   const { data: companySettings = [] } = useQuery({
     queryKey: ["company-settings"],
     queryFn: () => db.CompanySettings.list(),

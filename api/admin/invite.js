@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { buildInviteEmailContent } from "../email/inviteTemplates.js";
+import { upsertPendingInvitation, syncInvitedAuthMetadata } from "../lib/invitationStore.js";
 
 const createTransporter = () =>
   nodemailer.createTransport({
@@ -136,23 +137,18 @@ export default async function handler(req, res) {
 
     const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (invitationId) {
-      await ctx.admin
-        .from("invitations")
-        .update({ expires_at, status: "pending", role, invited_name: name, employee_id: empId })
-        .eq("id", invitationId);
-    } else {
-      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
-      await ctx.admin.from("invitations").insert({
+    await upsertPendingInvitation(
+      ctx.admin,
+      {
         email: targetEmail,
         role,
-        status: "pending",
-        invited_by: invitedBy || "",
-        expires_at,
-        employee_id: empId,
-        invited_name: name,
-      });
-    }
+        invitedBy: invitedBy || "",
+        expiresAt: expires_at,
+        employeeId: empId,
+        invitedName: name,
+      },
+      { invitationId }
+    );
 
     const { data: linkData, error: genError } = await ctx.admin.auth.admin.generateLink({
       type: "invite",
@@ -181,19 +177,13 @@ export default async function handler(req, res) {
     });
 
     const invitedUserId = linkData?.user?.id;
-    if (invitedUserId) {
-      await ctx.admin.from("profiles").upsert(
-        {
-          id: invitedUserId,
-          email: targetEmail,
-          full_name: name || targetEmail.split("@")[0],
-          role,
-        },
-        { onConflict: "id" }
-      );
-    }
+    await syncInvitedAuthMetadata(ctx.admin, invitedUserId, {
+      role,
+      fullName: name || "",
+      email: targetEmail,
+    });
 
-    return res.status(200).json({ success: true, email: targetEmail });
+    return res.status(200).json({ success: true, email: targetEmail, role });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e.message || "Invite failed" });

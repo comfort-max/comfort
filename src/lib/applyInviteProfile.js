@@ -9,5 +9,11 @@ export async function claimInvitationProfile() {
     }
     throw error;
   }
-  return data || { ok: false };
+  const result = data || { ok: false };
+  if (result?.ok) {
+    await supabase.auth.updateUser({
+      data: { role: result.role, full_name: result.full_name, invite_pending: false },
+    });
+  }
+  return result;
 }

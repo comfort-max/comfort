@@ -80,6 +80,65 @@ ${buildInstallInstructionsHtml(installUrl)}
   return { subject, text, html };
 }
 
+function isMissingRelationError(error: { message?: string; code?: string }) {
+  const msg = String(error?.message || "");
+  return error?.code === "42P01" || error?.code === "PGRST205" || /schema cache|does not exist|relation/i.test(msg);
+}
+
+const INVITE_TABLES = ["invitations", "invitation"];
+
+async function upsertPendingInvitation(
+  admin: ReturnType<typeof createClient>,
+  row: {
+    email: string;
+    role: string;
+    invitedBy: string;
+    expiresAt: string;
+    employeeId: string | null;
+    invitedName: string | null;
+  },
+  invitationId?: string,
+) {
+  const payload = {
+    email: row.email,
+    role: row.role,
+    status: "pending",
+    invited_by: row.invitedBy,
+    expires_at: row.expiresAt,
+    employee_id: row.employeeId,
+    invited_name: row.invitedName,
+  };
+
+  let lastError: { message?: string } | null = null;
+  for (const table of INVITE_TABLES) {
+    if (invitationId) {
+      const { error } = await admin.from(table).update({ ...payload, status: "pending" }).eq("id", invitationId);
+      if (!error) return;
+      lastError = error;
+      if (!isMissingRelationError(error)) break;
+      continue;
+    }
+    await admin.from(table).delete().eq("email", row.email).eq("status", "pending");
+    const { error } = await admin.from(table).insert(payload);
+    if (!error) return;
+    lastError = error;
+    if (!isMissingRelationError(error)) break;
+  }
+  throw new Error(lastError?.message || "Could not save invitation record");
+}
+
+async function syncInvitedAuthMetadata(
+  admin: ReturnType<typeof createClient>,
+  userId: string | undefined,
+  opts: { role: string; fullName: string },
+) {
+  if (!userId) return;
+  await admin.auth.admin.updateUserById(userId, {
+    user_metadata: { role: opts.role, full_name: opts.fullName, invite_pending: true },
+  });
+  await admin.from("profiles").delete().eq("id", userId);
+}
+
 async function getAdminContext(accessToken: string) {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -174,23 +233,18 @@ Deno.serve(async (req) => {
 
     const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (invitationId) {
-      await ctx.admin
-        .from("invitations")
-        .update({ expires_at, status: "pending", role, invited_name: name, employee_id: empId })
-        .eq("id", invitationId);
-    } else {
-      await ctx.admin.from("invitations").delete().eq("email", targetEmail).eq("status", "pending");
-      await ctx.admin.from("invitations").insert({
+    await upsertPendingInvitation(
+      ctx.admin,
+      {
         email: targetEmail,
         role,
-        status: "pending",
-        invited_by: invitedBy,
-        expires_at,
-        employee_id: empId,
-        invited_name: name,
-      });
-    }
+        invitedBy: invitedBy,
+        expiresAt: expires_at,
+        employeeId: empId,
+        invitedName: name,
+      },
+      invitationId,
+    );
 
     const { data: linkData, error: genError } = await ctx.admin.auth.admin.generateLink({
       type: "invite",
@@ -220,20 +274,12 @@ Deno.serve(async (req) => {
     const fromLabel = senderName || Deno.env.get("EMAIL_FROM_NAME") || companyName;
     await sendViaSMTP(targetEmail, subject, text, fromLabel, null, null, { html });
 
-    const invitedUserId = linkData?.user?.id;
-    if (invitedUserId) {
-      await ctx.admin.from("profiles").upsert(
-        {
-          id: invitedUserId,
-          email: targetEmail,
-          full_name: name || targetEmail.split("@")[0],
-          role,
-        },
-        { onConflict: "id" },
-      );
-    }
+    await syncInvitedAuthMetadata(ctx.admin, linkData?.user?.id, {
+      role,
+      fullName: name || "",
+    });
 
-    return Response.json({ success: true, email: targetEmail }, { headers: cors });
+    return Response.json({ success: true, email: targetEmail, role }, { headers: cors });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return Response.json({ error: msg || "Invite failed" }, { status: 500, headers: cors });
