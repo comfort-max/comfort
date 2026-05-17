@@ -1,6 +1,12 @@
 import React, { useEffect } from "react";
-import { supabase } from "@/api/supabaseClient";
-import { getAuthCallbackFromUrl, clearAuthCallbackFromUrl } from "@/lib/authCallback";
+import { supabase, hasPkceCodeVerifier } from "@/api/supabaseClient";
+import {
+  getAuthCallbackFromUrl,
+  clearAuthCallbackFromUrl,
+  consumeOAuthStartOrigin,
+  supabaseGoogleExchangeFailedMessage,
+  pkceVerifierMissingMessage,
+} from "@/lib/authCallback";
 import { Loader2 } from "lucide-react";
 
 const AUTH_ERROR_KEY = "comfort_auth_error";
@@ -16,9 +22,12 @@ function redirectToLogin(message) {
   window.location.replace("/login");
 }
 
+function oauthGuardKey(code) {
+  return `comfort_oauth_exchange_${code}`;
+}
+
 /**
- * Supabase OAuth (Google/Yahoo) returns here with ?code= (PKCE) or #access_token= (implicit).
- * Finishes sign-in then hard-navigates to / so AuthContext loads a persisted session.
+ * Completes Supabase OAuth (Google/Yahoo) on /auth/callback with a single PKCE exchange.
  */
 export default function AuthCallbackPage() {
   useEffect(() => {
@@ -33,40 +42,67 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      const startOrigin = consumeOAuthStartOrigin();
+      if (startOrigin && startOrigin !== window.location.origin) {
+        redirectToLogin(
+          `Sign-in started on ${startOrigin} but returned on ${window.location.origin}. Use one URL consistently (with or without www).`
+        );
+        return;
+      }
+
       const callback = getAuthCallbackFromUrl();
 
       try {
         if (callback?.kind === "pkce") {
+          const guardKey = oauthGuardKey(callback.code);
+          if (sessionStorage.getItem(guardKey) === "done") {
+            window.location.replace("/");
+            return;
+          }
+
+          if (!hasPkceCodeVerifier()) {
+            redirectToLogin(pkceVerifierMissingMessage());
+            return;
+          }
+
+          sessionStorage.setItem(guardKey, "pending");
+
           const { error } = await supabase.auth.exchangeCodeForSession(callback.code);
-          if (error) throw error;
+          if (cancelled) return;
+
+          if (error) {
+            sessionStorage.removeItem(guardKey);
+            if (/unable to exchange external code/i.test(error.message || "")) {
+              redirectToLogin(supabaseGoogleExchangeFailedMessage());
+              return;
+            }
+            throw error;
+          }
+
+          sessionStorage.setItem(guardKey, "done");
           clearAuthCallbackFromUrl();
-        } else if (callback?.kind === "oauth") {
+          window.location.replace("/");
+          return;
+        }
+
+        if (callback?.kind === "oauth") {
           const { error } = await supabase.auth.setSession({
             access_token: callback.access_token,
             refresh_token: callback.refresh_token,
           });
           if (error) throw error;
           clearAuthCallbackFromUrl();
-        } else {
-          redirectToLogin(
-            "Sign-in callback was missing authorization data. Add this URL under Supabase → Authentication → Redirect URLs: " +
-              `${window.location.origin}/auth/callback`
-          );
+          window.location.replace("/");
           return;
         }
 
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (cancelled) return;
-        if (sessionError) throw sessionError;
-        if (!session?.user) {
-          throw new Error("Sign-in completed but no session was stored. Try again or use email/password.");
-        }
-
-        window.location.replace("/");
+        redirectToLogin(
+          "Sign-in callback had no authorization code. Add " +
+            `${window.location.origin}/auth/callback under Supabase → Authentication → Redirect URLs.`
+        );
       } catch (err) {
         if (cancelled) return;
-        const msg = err?.message || "Social sign-in failed";
-        redirectToLogin(msg);
+        redirectToLogin(err?.message || "Social sign-in failed");
       }
     })();
 

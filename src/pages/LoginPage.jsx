@@ -19,7 +19,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
-import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl } from "@/lib/authCallback";
+import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl, rememberOAuthStartOrigin } from "@/lib/authCallback";
 import { consumeAuthErrorMessage } from "@/pages/auth/AuthCallbackPage";
 import { GoogleIcon, YahooIcon } from "@/components/icons/OAuthBrandIcons";
 
@@ -56,7 +56,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     const authError = consumeAuthErrorMessage();
     if (authError) {
-      toast.error(authError);
+      toast.error("Sign-in failed", { description: authError, duration: 12000 });
     }
   }, []);
 
@@ -151,7 +151,10 @@ export default function LoginPage() {
   const oauth = async (provider, loadingKey) => {
     setOauthLoading(loadingKey || provider);
     try {
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const appOrigin =
+        (import.meta.env.VITE_APP_URL || "").replace(/\/$/, "") || window.location.origin;
+      rememberOAuthStartOrigin();
+      const redirectTo = `${appOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo, skipBrowserRedirect: false },

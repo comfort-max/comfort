@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
         const path = typeof window !== "undefined" ? window.location.pathname : "";
 
         if (path === "/auth/callback") {
+          authReadyRef.current = true;
           return;
         }
 
