@@ -31,6 +31,8 @@ export default function BillNotificationDialog({
   companySettings,
   /** 'email' | 'whatsapp' — which tab to show first when opened */
   initialChannel = "email",
+  /** When false, dialog is view-only (no send / WhatsApp). */
+  canSend = true,
 }) {
   const [channel, setChannel] = useState(initialChannel);
   const [emailTo, setEmailTo] = useState("");
@@ -212,7 +214,7 @@ export default function BillNotificationDialog({
                 </Button>
                 <Button
                   className="gap-1 bg-blue-600 hover:bg-blue-700"
-                  disabled={sendEmailMutation.isPending || !emailTo.trim()}
+                  disabled={!canSend || sendEmailMutation.isPending || !emailTo.trim()}
                   onClick={() => sendEmailMutation.mutate()}
                 >
                   <Mail className="w-4 h-4" /> Send email
@@ -222,7 +224,7 @@ export default function BillNotificationDialog({
               <Button
                 className="gap-1 bg-green-600 hover:bg-green-700"
                 onClick={openWhatsapp}
-                disabled={!customer?.phone?.trim()}
+                disabled={!canSend || !customer?.phone?.trim()}
               >
                 <MessageSquare className="w-4 h-4" /> Open WhatsApp
               </Button>

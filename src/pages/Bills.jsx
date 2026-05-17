@@ -472,6 +472,7 @@ export default function Bills() {
         customer={notifyContext?.customer}
         companySettings={companySettings[0]}
         initialChannel={notifyContext?.initialChannel || "email"}
+        canSend={canNotifyCustomer}
       />
     </div>
   );

@@ -173,8 +173,22 @@ export default function RolePermissionMatrix({ value, onChange, disabled }) {
       <p className="text-[11px] text-muted-foreground leading-relaxed">
         Each column is a separate permission (export includes CSV/Excel/PDF/print where the app exposes them). Turning{" "}
         <strong>View</strong> off clears every flag for that module. Enabling any other flag turns <strong>View</strong> on.
-        Older roles only stored View/Edit/Delete — missing flags inherit from those until you save again (see each capability&apos;s help in Role Management).
+        Older roles only stored View/Edit/Delete — missing flags inherit from those until you save the role again.
       </p>
+      <ul className="text-[11px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-0.5">
+        <li>
+          <strong className="text-foreground">Upload</strong> — receipts on Bills &amp; Expenses, payment proof on Vendor Billing, logo on Company Settings.
+        </li>
+        <li>
+          <strong className="text-foreground">Bill notify / Send PO / Remind</strong> — customer bill email &amp; WhatsApp, vendor PO email, payment &amp; delivery reminders (uses Communication Templates).
+        </li>
+        <li>
+          <strong className="text-foreground">Communication Templates</strong> — create and edit message templates (Administration module).
+        </li>
+        <li>
+          <strong className="text-foreground">Test email</strong> — send a test message from Email Settings.
+        </li>
+      </ul>
     </div>
   );
 }

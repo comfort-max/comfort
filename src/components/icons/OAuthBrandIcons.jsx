@@ -1,7 +1,7 @@
 /** Brand marks for OAuth sign-in buttons (official-style colours). */
-export function GoogleIcon({ className = "h-4 w-4 shrink-0" }) {
+export function GoogleIcon({ className = "h-5 w-5 shrink-0" }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" role="img">
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -22,12 +22,18 @@ export function GoogleIcon({ className = "h-4 w-4 shrink-0" }) {
   );
 }
 
-export function YahooIcon({ className = "h-4 w-4 shrink-0" }) {
+/** Yahoo brand mark: purple tile with white “Y” (not crossed strokes). */
+export function YahooIcon({ className = "h-5 w-5 shrink-0" }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" role="img">
+      <rect width="24" height="24" rx="6" fill="#6001D2" />
       <path
-        fill="#6001D2"
-        d="M5.2 3.2h4.1l2.5 5.6 2.5-5.6h4.1L13.2 12l5.2 8.8h-4.1l-2.5-5.6-2.5 5.6H5.2L10.4 12 5.2 3.2z"
+        d="M7.25 6.75L12 13.25M16.75 6.75L12 13.25M12 13.25V17.25"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="2.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

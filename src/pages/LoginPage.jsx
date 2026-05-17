@@ -172,25 +172,33 @@ export default function LoginPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => {
-              const BrandIcon = key === "google" ? GoogleIcon : YahooIcon;
+              const isGoogle = key === "google";
+              const oauthBtnClass = isGoogle
+                ? "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-sm dark:bg-card dark:hover:bg-muted/60 dark:text-foreground dark:border-border"
+                : "bg-white hover:bg-[#6001D2]/[0.06] border-[#6001D2]/25 text-[#6001D2] shadow-sm dark:bg-card dark:hover:bg-[#6001D2]/10 dark:border-[#6001D2]/35";
               return (
                 <Button
                   key={key}
                   type="button"
                   variant="outline"
-                  className="w-full gap-2 font-medium shadow-sm hover:bg-muted/50"
+                  className={`w-full h-11 gap-2.5 font-medium transition-colors ${oauthBtnClass}`}
                   title={`Sign in with ${label}`}
                   aria-label={`Sign in with ${label}`}
                   disabled={!!oauthLoading}
                   onClick={() => oauth(provider, key)}
                 >
                   {oauthLoading === key ? (
-                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                    <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
+                  ) : isGoogle ? (
+                    <>
+                      <GoogleIcon />
+                      <span>{label}</span>
+                    </>
                   ) : (
                     <>
-                      <BrandIcon />
+                      <YahooIcon />
                       <span>{label}</span>
                     </>
                   )}
