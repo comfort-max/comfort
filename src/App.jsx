@@ -42,6 +42,7 @@ const CommunicationTemplates = lazy(() => import('./pages/admin/CommunicationTem
 const EmailSettings = lazy(() => import('./pages/admin/EmailSettings'));
 const DataOptimization = lazy(() => import('./pages/admin/DataOptimization'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const InstallAppPage = lazy(() => import('./pages/InstallAppPage'));
 const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'));
@@ -137,6 +138,7 @@ function App() {
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/install" element={<InstallAppPage />} />
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/auth/accept-invite" element={<AcceptInvitePage />} />
               <Route path="/auth/reset-password" element={<ResetPasswordPage />} />

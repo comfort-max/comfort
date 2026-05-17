@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useCompanyBranding } from "@/hooks/useCompanyBranding";
 import { CompanyLogoMark } from "@/components/shared/CompanyLogoMark";
@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
 import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl, rememberOAuthStartOrigin } from "@/lib/authCallback";
@@ -177,7 +177,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-lg border-border">
         <CardHeader className="text-center pb-4">
           <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center mx-auto mb-3 overflow-hidden ring-1 ring-primary/20">
@@ -283,6 +283,16 @@ export default function LoginPage() {
           </p>
         </CardContent>
       </Card>
+
+      <p className="mt-4 text-center">
+        <Link
+          to="/install"
+          className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1.5"
+        >
+          <Download className="w-4 h-4" />
+          Install app on computer or phone
+        </Link>
+      </p>
 
       <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
         <DialogContent className="sm:max-w-md">
