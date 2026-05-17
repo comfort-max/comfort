@@ -26,6 +26,8 @@ import { sortByLocaleKey } from "@/lib/utils";
 import { activePaymentMethodsSorted, defaultPaymentMethodName as pickDefaultPaymentMethod, paymentMethodSelectValue } from "@/lib/paymentMethodUi";
 import { computeVendorBillingPaymentState, vendorBillingSignedDue } from "@/lib/paymentBalance";
 
+const PAYMENT_STATUS_SORT_ORDER = { pending: 0, partial: 1, paid: 2, overpaid: 3 };
+
 export default function VendorBillingPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -113,7 +115,7 @@ export default function VendorBillingPage() {
       pending: "bg-amber-50 text-amber-700 border-amber-200",
       partial: "bg-orange-50 text-orange-600 border-orange-200",
       paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      overpaid: "bg-cyan-50 text-cyan-800 border-cyan-200",
+      overpaid: "bg-pink-50 text-pink-700 border-pink-200",
     };
     const labels = { pending: "Pending", partial: "Partial", paid: "Paid", overpaid: "Overpaid" };
     return (
@@ -136,12 +138,18 @@ export default function VendorBillingPage() {
     { key: 'amount_due', header: 'Due', render: (r) => {
       const due = vendorBillingSignedDue(r);
       return (
-        <span className={due > 0 ? "text-amber-600 font-medium" : due < 0 ? "text-sky-700 font-medium" : ""}>
+        <span className={due > 0 ? "text-amber-600 font-medium" : due < 0 ? "text-pink-700 font-medium" : ""}>
           {formatCurrencyAmount(due, companySettings[0])}
         </span>
       );
     }},
-    { key: 'payment_status', header: 'Status', render: paymentStatusBadge },
+    {
+      key: 'payment_status',
+      header: 'Payment status',
+      sortable: true,
+      accessor: (r) => PAYMENT_STATUS_SORT_ORDER[r.payment_status] ?? 99,
+      render: paymentStatusBadge,
+    },
     { key: 'remarks', header: 'Remarks', accessor: 'remarks' },
     ...(companySettings[0]?.enable_vendor_payment_proof ? [{ key: 'payment_proof', header: 'Payment Proof', render: (r) => r.payment_proof_url ? <a href={r.payment_proof_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View</a> : '-' }] : []),
     { key: 'actions', header: '', render: (r) => (
@@ -191,7 +199,7 @@ export default function VendorBillingPage() {
           <div className="ml-auto flex flex-wrap gap-x-4 gap-y-1 text-sm justify-end">
             {totalDue > 0 && <span className="font-semibold text-destructive">Total Due: {formatCurrencyAmount(totalDue, companySettings[0])}</span>}
             {totalVendorCredit > 0 && (
-              <span className="font-semibold text-sky-700">Vendor credits (overpaid): {formatCurrencyAmount(totalVendorCredit, companySettings[0])}</span>
+              <span className="font-semibold text-pink-700">Vendor credits (overpaid): {formatCurrencyAmount(totalVendorCredit, companySettings[0])}</span>
             )}
           </div>
         )}
@@ -242,7 +250,7 @@ export default function VendorBillingPage() {
                   const bal = (paymentDialog.totalAmount || 0) - (paymentDialog.amountPaid || 0);
                   const isCredit = bal < 0;
                   return (
-                    <div className={`flex justify-between font-semibold ${isCredit ? "text-sky-700" : "text-destructive"}`}>
+                    <div className={`flex justify-between font-semibold ${isCredit ? "text-pink-700" : "text-destructive"}`}>
                       <span>{isCredit ? "Credit (overpaid)" : "Balance Due"}</span>
                       <span>{formatCurrencyAmount(bal, companySettings[0])}</span>
                     </div>

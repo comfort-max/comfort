@@ -9,7 +9,7 @@ const statusStyles = {
   partial: "bg-orange-50 text-orange-600 border-orange-200",
   paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
   paid_excess: "bg-sky-50 text-sky-800 border-sky-200",
-  overpaid: "bg-cyan-50 text-cyan-800 border-cyan-200",
+  overpaid: "bg-pink-50 text-pink-700 border-pink-200",
   completed: "bg-blue-50 text-blue-700 border-blue-200",
   cancelled: "bg-gray-50 text-gray-500 border-gray-200",
   accepted: "bg-emerald-50 text-emerald-700 border-emerald-200",

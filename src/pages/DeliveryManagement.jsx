@@ -627,7 +627,13 @@ export default function DeliveryManagement() {
             <div className="flex gap-2 mb-3 items-end flex-wrap">
               {canDeliveryStatus && (
                 <>
-              <Select value={deliveryEmployee || '__none__'} onValueChange={(v) => setDeliveryEmployee(v === '__none__' ? '' : v)}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Delivery By" /></SelectTrigger><SelectContent><SelectItem value="__none__">Delivery By</SelectItem>{salesDeliveryEmployees.map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent></Select>
+              <div>
+                <Label className="text-xs" required>Delivery By</Label>
+                <Select value={deliveryEmployee || '__none__'} onValueChange={(v) => setDeliveryEmployee(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                  <SelectContent><SelectItem value="__none__">Select employee</SelectItem>{salesDeliveryEmployees.map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div><Label className="text-xs">Delivery Date</Label><Input type="date" className="h-9 w-36" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} /></div>
               <Button size="sm" onClick={() => { if (!deliveryEmployee) { toast.error("Select delivery employee"); return; } markDeliveredMutation.mutate({ ids: selectedIds, deliveredBy: deliveryEmployee, delivDate: deliveryDate }); }} disabled={markDeliveredMutation.isPending}>Mark Delivered ({selectedIds.length})</Button>
               <Button size="sm" variant="outline" onClick={() => markNotReadyMutation.mutate({ ids: selectedIds, backStatus: 'with_vendor' })} disabled={markNotReadyMutation.isPending}>Mark Not Ready ({selectedIds.length})</Button>
@@ -646,8 +652,14 @@ export default function DeliveryManagement() {
               const dateVal = rowDeliveryDate[item.id] || format(new Date(), 'yyyy-MM-dd');
               if (!canDeliveryStatus) return null;
               return (
-                <div className="flex gap-1 items-center">
-                  <Select value={empVal || '__none__'} onValueChange={v => setRowDeliveryEmployee(prev => ({ ...prev, [item.id]: v === '__none__' ? '' : v }))}><SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Delivery By" /></SelectTrigger><SelectContent><SelectItem value="__none__">Delivery By</SelectItem>{salesDeliveryEmployees.map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent></Select>
+                <div className="flex gap-1 items-end">
+                  <div>
+                    <Label className="text-[10px] leading-none mb-0.5" required>Delivery By</Label>
+                    <Select value={empVal || '__none__'} onValueChange={v => setRowDeliveryEmployee(prev => ({ ...prev, [item.id]: v === '__none__' ? '' : v }))}>
+                      <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent><SelectItem value="__none__">Select</SelectItem>{salesDeliveryEmployees.map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
                   <Input type="date" className="h-7 w-28 text-xs" value={dateVal} onChange={e => setRowDeliveryDate(prev => ({ ...prev, [item.id]: e.target.value }))} />
                   <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => markNotReadyMutation.mutate({ ids: [item.id], backStatus: 'with_vendor' })} disabled={markNotReadyMutation.isPending}>Not Ready</Button>
                   <Button size="sm" className="text-xs h-7" onClick={() => { if (!empVal) { toast.error("Select delivery employee"); return; } markDeliveredMutation.mutate({ ids: [item.id], deliveredBy: empVal, delivDate: dateVal }); }} disabled={markDeliveredMutation.isPending}>Delivered</Button>
