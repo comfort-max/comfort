@@ -112,19 +112,29 @@ export default function DeliveryManagement() {
     [vendorOrders]
   );
 
+  const isPreReadyVendorStatus = (status) => {
+    const s = (status || "pending").trim();
+    return s === "pending" || s === "with_vendor";
+  };
+
   /** PO issued and PO still exists; not yet ready for customer delivery. */
   const vendorOrderItems = useMemo(
     () =>
       billItems.filter((i) => {
         if (!i.vendor_id || !i.vendor_order_id) return false;
         if (!activeVendorPoIds.has(String(i.vendor_order_id))) return false;
-        const s = i.delivery_status;
-        return s !== "ready_for_delivery" && s !== "delivered_unpaid" && s !== "delivered_paid";
+        return isPreReadyVendorStatus(i.delivery_status);
       }),
     [billItems, activeVendorPoIds]
   );
-  const readyItems = billItems.filter(i => i.delivery_status === 'ready_for_delivery');
-  const deliveredUnpaid = billItems.filter(i => i.delivery_status === 'delivered_unpaid');
+  const readyItems = useMemo(
+    () => billItems.filter((i) => i.vendor_id && i.delivery_status === "ready_for_delivery"),
+    [billItems]
+  );
+  const deliveredUnpaid = useMemo(
+    () => billItems.filter((i) => i.delivery_status === "delivered_unpaid"),
+    [billItems]
+  );
 
   const statusItems = useMemo(() => billItems.filter(i => i.vendor_id).filter(i => { const bill = bills.find(b => b.id === i.bill_id); const date = bill?.bill_date || ''; if (statusDateFrom && date < statusDateFrom) return false; if (statusDateTo && date > statusDateTo) return false; return true; }), [billItems, bills, statusDateFrom, statusDateTo]);
 
@@ -133,16 +143,67 @@ export default function DeliveryManagement() {
 
   const markReadyMutation = useMutation({
     mutationFn: async ({ ids }) => {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      await Promise.all(ids.map(async id => {
-        const item = billItems.find(i => i.id === id);
-        if (!item?.vendor_id) return;
-        await db.BillItem.update(id, { delivery_status: 'ready_for_delivery' });
-        const existing = getVendorBillingForItem(id);
-        if (!existing) await db.VendorBilling.create({ date: today, vendor_id: item.vendor_id, vendor_name: item.vendor_name || '', bill_item_id: id, bill_numbers: item.bill_number || '', amount: item.vendor_amount || 0, payment_method: 'cash', entry_by: user?.full_name || user?.email || '', entry_timestamp: new Date().toISOString(), remarks: `${item.item_name} x${item.quantity} - Bill #${item.bill_number}` });
-      }));
+      const today = format(new Date(), "yyyy-MM-dd");
+      const billingSnapshot = [...vendorBillings];
+      let updated = 0;
+      const billingWarnings = [];
+
+      for (const id of ids) {
+        const item = billItems.find((i) => String(i.id) === String(id));
+        if (!item?.vendor_id) continue;
+
+        await db.BillItem.update(id, { delivery_status: "ready_for_delivery" });
+        updated += 1;
+
+        const existing = billingSnapshot.find((vb) => String(vb.bill_item_id) === String(id));
+        if (existing) continue;
+
+        try {
+          await db.VendorBilling.create({
+            date: today,
+            vendor_id: item.vendor_id,
+            vendor_name: item.vendor_name || "",
+            bill_item_id: id,
+            bill_numbers: item.bill_number || "",
+            amount: item.vendor_amount || 0,
+            payment_method: "cash",
+            entry_by: user?.full_name || user?.email || "",
+            entry_timestamp: new Date().toISOString(),
+            remarks: `${item.item_name} x${item.quantity} - Bill #${item.bill_number}`,
+          });
+        } catch (err) {
+          billingWarnings.push(item.bill_number || id);
+          console.warn("Vendor billing entry skipped for ready item:", id, err);
+        }
+      }
+
+      if (!updated) {
+        throw new Error("No items were updated. Select lines from Vendor Orders and try again.");
+      }
+      return { updated, billingWarnings };
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bill-items-delivery'] }); qc.invalidateQueries({ queryKey: ['vendor-billings'] }); setSelectedIds([]); toast.success("Marked as Ready"); }
+    onSuccess: async ({ updated, billingWarnings }) => {
+      setSelectedIds([]);
+      setTab("ready");
+      await qc.invalidateQueries({ queryKey: ["bill-items-delivery"] });
+      await qc.refetchQueries({ queryKey: ["bill-items-delivery"] });
+      qc.invalidateQueries({ queryKey: ["vendor-billings"] });
+      qc.invalidateQueries({ predicate: (q) => String(q.queryKey?.[0] || "").startsWith("bill-items") });
+      const msg =
+        updated === 1
+          ? "1 item moved to Ready for Delivery"
+          : `${updated} items moved to Ready for Delivery`;
+      if (billingWarnings.length) {
+        toast.success(msg, {
+          description: "Some vendor billing rows could not be created; delivery status was still updated.",
+        });
+      } else {
+        toast.success(msg);
+      }
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Could not mark items as ready");
+    },
   });
 
   const markNotReadyMutation = useMutation({
