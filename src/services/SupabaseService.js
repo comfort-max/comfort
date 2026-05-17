@@ -377,6 +377,25 @@ export async function sendAdminInvite(payload) {
   return json;
 }
 
+/** Admin-only: permanently delete a user (auth account + profile). */
+export async function deleteAdminUser(userId) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in");
+  if (!userId) throw new Error("user_id is required");
+
+  const res = await fetch("/api/admin/delete-user", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Delete user failed");
+  return json;
+}
+
 /** Notify administrators to review this user's role (access denied screen). */
 export async function sendAccessRequestToAdmins() {
   const { data: { session } } = await supabase.auth.getSession();

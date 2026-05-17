@@ -3,6 +3,7 @@ import cors from "cors";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import inviteHandler from "../api/admin/invite.js";
+import deleteUserHandler from "../api/admin/delete-user.js";
 
 dotenv.config();
 
@@ -96,6 +97,7 @@ app.get("/api/email/health", (req, res) => {
 });
 
 app.post("/api/admin/invite", (req, res) => inviteHandler(req, res));
+app.post("/api/admin/delete-user", (req, res) => deleteUserHandler(req, res));
 
 const PORT = process.env.SERVER_PORT || 3001;
 app.listen(PORT, () => {

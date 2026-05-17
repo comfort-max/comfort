@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { db, sendAdminInvite } from "@/services/SupabaseService";
+import { db, sendAdminInvite, deleteAdminUser } from "@/services/SupabaseService";
 import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, UserPlus, Shield, Bell } from "lucide-react";
+import { Pencil, UserPlus, Shield, Bell, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 import { useAuth } from "@/lib/AuthContext";
 import RolePermissionMatrix from "@/components/admin/RolePermissionMatrix";
 import { normalizePermissions } from "@/lib/permissions";
@@ -32,6 +33,7 @@ export default function UserManagement() {
   const [showInvite, setShowInvite] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showRolePerms, setShowRolePerms] = useState(false);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
   const [permRoleId, setPermRoleId] = useState(null);
   const [permState, setPermState] = useState(() => defaultNewRolePermissions());
 
@@ -219,6 +221,18 @@ export default function UserManagement() {
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId) => deleteAdminUser(userId),
+    onSuccess: () => {
+      setConfirmDeleteUser(null);
+      setShowEdit(false);
+      toast.success("User deleted");
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["user-access-requests"] });
+    },
+    onError: (err) => toast.error(err?.message || "Failed to delete user"),
+  });
+
   const saveRolePermissionsMutation = useMutation({
     mutationFn: async () => {
       if (!permRoleId) throw new Error("No role selected");
@@ -285,6 +299,17 @@ export default function UserManagement() {
           >
             <Pencil className="h-4 w-4" />
           </Button>
+          )}
+          {isAdmin && r.id !== user?.id && String(r.role || "").toLowerCase() !== "admin" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              title="Delete user"
+              onClick={() => setConfirmDeleteUser(r)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           )}
         </div>
       ),
@@ -536,6 +561,23 @@ export default function UserManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmModal
+        open={!!confirmDeleteUser}
+        onClose={() => !deleteUserMutation.isPending && setConfirmDeleteUser(null)}
+        onConfirm={() => {
+          if (confirmDeleteUser?.id) deleteUserMutation.mutate(confirmDeleteUser.id);
+        }}
+        title="Delete user?"
+        description={
+          confirmDeleteUser
+            ? `Permanently delete ${confirmDeleteUser.full_name || confirmDeleteUser.email || "this user"}? Their login will be removed and they will no longer be able to sign in. This cannot be undone.`
+            : ""
+        }
+        confirmText="Delete user"
+        destructive
+        loading={deleteUserMutation.isPending}
+      />
     </div>
   );
 }
