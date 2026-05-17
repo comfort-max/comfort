@@ -1,5 +1,12 @@
 const CACHE = "comfort-pwa-v1";
-const PRECACHE = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-maskable.svg"];
+const PRECACHE = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/pwa-192.png",
+  "/icons/pwa-512.png",
+  "/icons/pwa-maskable-512.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

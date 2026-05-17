@@ -7,6 +7,8 @@ import { Download, Monitor, Smartphone, Copy, Check, ExternalLink, ArrowLeft } f
 import { toast } from "sonner";
 import { getAppOrigin } from "@/lib/appOrigin";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { useCompanyBranding } from "@/hooks/useCompanyBranding";
+import { CompanyLogoMark } from "@/components/shared/CompanyLogoMark";
 
 const APP_URL = getAppOrigin();
 
@@ -32,6 +34,7 @@ function CopyUrlButton() {
 
 export default function InstallAppPage() {
   const { canInstall, isInstalled, isIos, promptInstall } = usePwaInstall();
+  const { companyName, resolvedLogoSrc } = useCompanyBranding();
   const [installing, setInstalling] = useState(false);
 
   const handleInstall = async () => {
@@ -64,8 +67,13 @@ export default function InstallAppPage() {
         </div>
 
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-2xl bg-[#2a7a8c] text-white text-3xl font-bold flex items-center justify-center mx-auto shadow-md">
-            C
+          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto shadow-md overflow-hidden ring-1 ring-primary/20">
+            <CompanyLogoMark
+              src={resolvedLogoSrc}
+              companyName={companyName}
+              imgClassName="w-full h-full object-contain bg-primary p-1"
+              letterClassName="text-primary-foreground font-bold text-3xl"
+            />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Install COMFORT</h1>
           <p className="text-sm text-muted-foreground">

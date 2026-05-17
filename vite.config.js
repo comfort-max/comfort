@@ -37,6 +37,14 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      "/api/pwa-icon": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+      "/api/pwa-manifest": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
     },
   },
 })
