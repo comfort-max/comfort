@@ -85,19 +85,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Administrator accounts cannot be deleted from User Management" });
     }
 
-    await ctx.admin.from("user_access_requests").delete().eq("user_id", userId);
+    const { error: accessErr } = await ctx.admin.from("user_access_requests").delete().eq("user_id", userId);
+    if (accessErr && !/does not exist|schema cache/i.test(accessErr.message || "")) {
+      return res.status(400).json({ error: accessErr.message || "Could not clear access requests" });
+    }
 
     const email = String(target.email || "").trim().toLowerCase();
     if (email) {
       await ctx.admin.from("invitations").delete().eq("email", email);
     }
 
-    const { error: delAuthErr } = await ctx.admin.auth.admin.deleteUser(userId);
-    if (delAuthErr) {
-      return res.status(400).json({ error: delAuthErr.message || "Could not delete auth user" });
+    // Profile must be removed before auth.users delete when FK lacks ON DELETE CASCADE.
+    const { error: profileErr } = await ctx.admin.from("profiles").delete().eq("id", userId);
+    if (profileErr) {
+      return res.status(400).json({ error: profileErr.message || "Could not delete user profile" });
     }
 
-    await ctx.admin.from("profiles").delete().eq("id", userId);
+    const { error: delAuthErr } = await ctx.admin.auth.admin.deleteUser(userId);
+    if (delAuthErr) {
+      return res.status(400).json({
+        error:
+          delAuthErr.message ||
+          "Could not delete login account. If this persists, run supabase/migrations/20260523120000_user_delete_cascade.sql in the Supabase SQL editor.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
