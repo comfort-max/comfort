@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
+import { completeAuthCallbackFromUrl } from '@/lib/authCallback';
 
 const AuthContext = createContext(null);
 
@@ -9,21 +10,44 @@ export function AuthProvider({ children }) {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setAuthUser(session.user);
-        loadProfile(session.user);
-      } else {
-        setIsLoadingAuth(false);
+    let cancelled = false;
+
+    async function bootstrapAuth() {
+      try {
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const isResetRoute = path === "/auth/reset-password" || path === "/auth/accept-invite";
+        if (!isResetRoute) {
+          const { error } = await completeAuthCallbackFromUrl(supabase);
+          if (error && !cancelled) {
+            console.warn("Auth callback failed:", error.message);
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session?.user) {
+          setAuthUser(session.user);
+          await loadProfile(session.user);
+        } else {
+          setIsLoadingAuth(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("Auth bootstrap failed:", err);
+          setIsLoadingAuth(false);
+        }
       }
-    });
+    }
+
+    bootstrapAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" && session?.user) {
         const path = typeof window !== "undefined" ? window.location.pathname : "";
         if (path !== "/auth/reset-password") {
+          const search = typeof window !== "undefined" ? window.location.search || "" : "";
           const h = typeof window !== "undefined" ? window.location.hash || "" : "";
-          window.location.replace(`${window.location.origin}/auth/reset-password${h}`);
+          window.location.replace(`${window.location.origin}/auth/reset-password${search}${h}`);
           return;
         }
       }
@@ -37,7 +61,10 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function loadProfile(authSessionUser) {

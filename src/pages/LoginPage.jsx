@@ -19,6 +19,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
+import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl } from "@/lib/authCallback";
 import { GoogleIcon, YahooIcon } from "@/components/icons/OAuthBrandIcons";
 
 const RESET_EMAIL_COOLDOWN_MS = 90_000;
@@ -39,7 +40,7 @@ function markResetEmailSent(email) {
 }
 
 export default function LoginPage() {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isLoadingAuth } = useAuth();
   const { companyName, resolvedLogoSrc } = useCompanyBranding();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -52,21 +53,31 @@ export default function LoginPage() {
   const resetInFlight = useRef(false);
 
   React.useEffect(() => {
-    const h = typeof window !== "undefined" ? window.location.hash : "";
-    if (h && (h.includes("access_token") || h.includes("type=recovery"))) {
-      navigate(`/auth/reset-password${h}`, { replace: true });
+    if (isRecoveryCallbackUrl()) {
+      const search = window.location.search || "";
+      const hash = window.location.hash || "";
+      navigate(`/auth/reset-password${search}${hash}`, { replace: true });
     }
   }, [navigate]);
 
   React.useEffect(() => {
-    if (!isAuthenticated) return;
-    const h = typeof window !== "undefined" ? window.location.hash : "";
-    if (h && (h.includes("access_token") || h.includes("type=recovery"))) {
-      navigate(`/auth/reset-password${h}`, { replace: true });
+    if (!isAuthenticated || isPendingAuthCallbackUrl()) return;
+    if (isRecoveryCallbackUrl()) {
+      const search = window.location.search || "";
+      const hash = window.location.hash || "";
+      navigate(`/auth/reset-password${search}${hash}`, { replace: true });
       return;
     }
     navigate("/", { replace: true });
   }, [isAuthenticated, navigate]);
+
+  if (isPendingAuthCallbackUrl() || isLoadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -132,7 +143,7 @@ export default function LoginPage() {
   const oauth = async (provider, loadingKey) => {
     setOauthLoading(loadingKey || provider);
     try {
-      const redirectTo = `${window.location.origin}/`;
+      const redirectTo = `${window.location.origin}/login`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo, skipBrowserRedirect: false },

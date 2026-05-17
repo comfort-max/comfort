@@ -6,6 +6,7 @@ import { queryClientInstance } from '@/lib/query-client';
 import GlobalActionProgressBar from '@/components/shared/GlobalActionProgressBar';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
 import PageNotFound from '@/lib/PageNotFound';
 import AppLayout from './components/layout/AppLayout';
 
@@ -71,21 +72,16 @@ const LoadingScreen = () => {
   );
 };
 
-/** Supabase recovery links put tokens in the hash; React Router's Navigate to /login drops the hash and breaks reset. */
-function authHashLooksLikeRecovery() {
-  if (typeof window === "undefined") return false;
-  const h = window.location.hash || "";
-  return h.includes("access_token") || h.includes("type=recovery") || h.includes("refresh_token");
-}
-
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
 
-  if (authHashLooksLikeRecovery()) {
-    return <Navigate to={`/auth/reset-password${window.location.hash}`} replace />;
+  if (isRecoveryCallbackUrl()) {
+    const search = window.location.search || "";
+    const hash = window.location.hash || "";
+    return <Navigate to={`/auth/reset-password${search}${hash}`} replace />;
   }
 
-  if (isLoadingAuth) return <LoadingScreen />;
+  if (isPendingAuthCallbackUrl() || isLoadingAuth) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
