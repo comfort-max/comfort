@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
+import {
+  getAuthCallbackFromUrl,
+  isRecoveryCallbackUrl,
+  shouldPromptForPassword,
+} from "@/lib/authCallback";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,11 +24,11 @@ export default function ResetPasswordPage() {
     let cancelled = false;
 
     (async () => {
-      const url = new URL(window.location.href);
-      const code = url.searchParams.get("code");
+      const recoveryFromUrl = isRecoveryCallbackUrl();
+      const callback = getAuthCallbackFromUrl();
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (callback?.kind === "recovery" && callback.code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(callback.code);
         if (cancelled) return;
         if (error) {
           toast.error(error.message || "Invalid or expired reset link");
@@ -31,6 +36,11 @@ export default function ResetPasswordPage() {
           return;
         }
         window.history.replaceState(null, "", window.location.pathname);
+        const user = data?.session?.user;
+        if (user && !shouldPromptForPassword(user)) {
+          navigate("/", { replace: true });
+          return;
+        }
         setPhase("ready");
         return;
       }
@@ -40,32 +50,50 @@ export default function ResetPasswordPage() {
       const access_token = params.get("access_token");
       const refresh_token = params.get("refresh_token");
 
-      if (!access_token || !refresh_token) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user && !cancelled) {
-          setPhase("ready");
+      if (access_token && refresh_token) {
+        const type = params.get("type");
+        if (type !== "recovery") {
+          if (cancelled) return;
+          navigate("/", { replace: true });
           return;
         }
+        const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
         if (cancelled) return;
-        setPhase("invalid");
+        if (error) {
+          toast.error(error.message || "Could not open reset session");
+          setPhase("invalid");
+          return;
+        }
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        const user = data?.session?.user;
+        if (user && !shouldPromptForPassword(user)) {
+          navigate("/", { replace: true });
+          return;
+        }
+        setPhase("ready");
         return;
       }
 
-      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+      const { data: { session } } = await supabase.auth.getSession();
       if (cancelled) return;
-      if (error) {
-        toast.error(error.message || "Could not open reset session");
-        setPhase("invalid");
+
+      if (session?.user && recoveryFromUrl && shouldPromptForPassword(session.user)) {
+        setPhase("ready");
         return;
       }
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-      setPhase("ready");
+
+      if (session?.user) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      setPhase("invalid");
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [navigate]);
 
   const submit = async (e) => {
     e.preventDefault();

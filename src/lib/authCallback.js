@@ -2,12 +2,28 @@
  * Detect and clear Supabase auth redirects (OAuth sign-in, PKCE code, recovery).
  */
 
+export function hasOnlyOAuthIdentities(user) {
+  const identities = user?.identities ?? [];
+  if (!identities.length) return false;
+  return identities.every((i) => i.provider !== "email");
+}
+
+/** True when the user should be prompted to set/change a password (not OAuth-only). */
+export function shouldPromptForPassword(user) {
+  if (!user) return false;
+  return !hasOnlyOAuthIdentities(user);
+}
+
 export function getAuthCallbackFromUrl(href = typeof window !== "undefined" ? window.location.href : "") {
   if (!href) return null;
 
   const url = new URL(href);
   const code = url.searchParams.get("code");
   if (code) {
+    // PKCE password-reset emails land on /auth/reset-password; OAuth lands on /login (or /).
+    if (url.pathname === "/auth/reset-password") {
+      return { kind: "recovery", code };
+    }
     return { kind: "pkce", code };
   }
 
@@ -48,8 +64,11 @@ export async function completeAuthCallbackFromUrl(supabase) {
   if (!callback) return { error: null };
 
   if (callback.kind === "pkce") {
-    const { error } = await supabase.auth.exchangeCodeForSession(callback.code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(callback.code);
     if (!error) clearAuthCallbackFromUrl();
+    if (!error && data?.session?.user && hasOnlyOAuthIdentities(data.session.user)) {
+      return { error: null, oauthOnly: true };
+    }
     return { error };
   }
 

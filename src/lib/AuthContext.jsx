@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
-import { completeAuthCallbackFromUrl } from '@/lib/authCallback';
+import { completeAuthCallbackFromUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
 
 const AuthContext = createContext(null);
 
@@ -44,7 +44,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" && session?.user) {
         const path = typeof window !== "undefined" ? window.location.pathname : "";
-        if (path !== "/auth/reset-password") {
+        if (path !== "/auth/reset-password" && isRecoveryCallbackUrl()) {
           const search = typeof window !== "undefined" ? window.location.search || "" : "";
           const h = typeof window !== "undefined" ? window.location.hash || "" : "";
           window.location.replace(`${window.location.origin}/auth/reset-password${search}${h}`);
