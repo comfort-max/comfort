@@ -21,7 +21,8 @@ import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
 import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl, rememberOAuthStartOrigin } from "@/lib/authCallback";
 import { consumeAuthErrorMessage } from "@/pages/auth/AuthCallbackPage";
-import { GoogleIcon, YahooIcon } from "@/components/icons/OAuthBrandIcons";
+import { YahooIcon } from "@/components/icons/OAuthBrandIcons";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 const RESET_EMAIL_COOLDOWN_MS = 90_000;
 
@@ -196,10 +197,18 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {LOGIN_OAUTH_PROVIDERS.map(({ key, provider, label }) => {
-              const isGoogle = key === "google";
-              const oauthBtnClass = isGoogle
-                ? "bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-sm dark:bg-card dark:hover:bg-muted/60 dark:text-foreground dark:border-border"
-                : "bg-white hover:bg-[#6001D2]/[0.06] border-[#6001D2]/25 text-[#6001D2] shadow-sm dark:bg-card dark:hover:bg-[#6001D2]/10 dark:border-[#6001D2]/35";
+              if (key === "google") {
+                return (
+                  <GoogleSignInButton
+                    key={key}
+                    loading={oauthLoading === "google"}
+                    disabled={!!oauthLoading && oauthLoading !== "google"}
+                    onLoadingChange={(busy) => setOauthLoading(busy ? "google" : null)}
+                  />
+                );
+              }
+              const oauthBtnClass =
+                "bg-white hover:bg-[#6001D2]/[0.06] border-[#6001D2]/25 text-[#6001D2] shadow-sm dark:bg-card dark:hover:bg-[#6001D2]/10 dark:border-[#6001D2]/35";
               return (
                 <Button
                   key={key}
@@ -213,11 +222,6 @@ export default function LoginPage() {
                 >
                   {oauthLoading === key ? (
                     <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
-                  ) : isGoogle ? (
-                    <>
-                      <GoogleIcon />
-                      <span>{label}</span>
-                    </>
                   ) : (
                     <>
                       <YahooIcon />
