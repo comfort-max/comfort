@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -7,49 +7,42 @@ import GlobalActionProgressBar from '@/components/shared/GlobalActionProgressBar
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import PageNotFound from '@/lib/PageNotFound';
-
-// Layout
 import AppLayout from './components/layout/AppLayout';
 
-// Pages
-import Dashboard from './pages/Dashboard';
-import Employees from './pages/Employees';
-import Customers from './pages/Customers';
-import Vendors from './pages/Vendors';
-import Bills from './pages/Bills';
-import PaymentCollectionPage from './pages/PaymentCollectionPage';
-import Expenses from './pages/Expenses';
-import VendorJobs from './pages/VendorJobs';
-import VendorOrdersPage from './pages/VendorOrdersPage';
-import VendorBillingPage from './pages/VendorBillingPage';
-import Salary from './pages/Salary';
-import DeliveryManagement from './pages/DeliveryManagement';
-
-// Reports
-import SalesReports from './pages/reports/SalesReports';
-import PaymentReports from './pages/reports/PaymentReports';
-import OutstandingReports from './pages/reports/OutstandingReports';
-import ExpenseBooks from './pages/reports/ExpenseBooks';
-import PnlReport from './pages/reports/PnlReport';
-import SalaryReport from './pages/reports/SalaryReport';
-import VendorVolumeReport from './pages/reports/VendorVolumeReport';
-
-// Admin
-import UserManagement from './pages/admin/UserManagement';
-import Invitations from './pages/admin/Invitations';
-import TrashBin from './pages/admin/TrashBin';
-import VendorRates from './pages/admin/VendorRates';
-import CompanySettings from './pages/admin/CompanySettings';
-import RateList from './pages/admin/RateList';
-import IncentiveManagement from './pages/admin/IncentiveManagement';
-import ExpenseCategories from './pages/admin/ExpenseCategories';
-import RoleManagement from './pages/admin/RoleManagement';
-import CommunicationTemplates from './pages/admin/CommunicationTemplates';
-import EmailSettings from './pages/admin/EmailSettings';
-import DataOptimization from './pages/admin/DataOptimization';
-import LoginPage from './pages/LoginPage';
-import AcceptInvitePage from './pages/auth/AcceptInvitePage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Employees = lazy(() => import('./pages/Employees'));
+const Customers = lazy(() => import('./pages/Customers'));
+const Vendors = lazy(() => import('./pages/Vendors'));
+const Bills = lazy(() => import('./pages/Bills'));
+const PaymentCollectionPage = lazy(() => import('./pages/PaymentCollectionPage'));
+const Expenses = lazy(() => import('./pages/Expenses'));
+const VendorJobs = lazy(() => import('./pages/VendorJobs'));
+const VendorOrdersPage = lazy(() => import('./pages/VendorOrdersPage'));
+const VendorBillingPage = lazy(() => import('./pages/VendorBillingPage'));
+const Salary = lazy(() => import('./pages/Salary'));
+const DeliveryManagement = lazy(() => import('./pages/DeliveryManagement'));
+const SalesReports = lazy(() => import('./pages/reports/SalesReports'));
+const PaymentReports = lazy(() => import('./pages/reports/PaymentReports'));
+const OutstandingReports = lazy(() => import('./pages/reports/OutstandingReports'));
+const ExpenseBooks = lazy(() => import('./pages/reports/ExpenseBooks'));
+const PnlReport = lazy(() => import('./pages/reports/PnlReport'));
+const SalaryReport = lazy(() => import('./pages/reports/SalaryReport'));
+const VendorVolumeReport = lazy(() => import('./pages/reports/VendorVolumeReport'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const Invitations = lazy(() => import('./pages/admin/Invitations'));
+const TrashBin = lazy(() => import('./pages/admin/TrashBin'));
+const VendorRates = lazy(() => import('./pages/admin/VendorRates'));
+const CompanySettings = lazy(() => import('./pages/admin/CompanySettings'));
+const RateList = lazy(() => import('./pages/admin/RateList'));
+const IncentiveManagement = lazy(() => import('./pages/admin/IncentiveManagement'));
+const ExpenseCategories = lazy(() => import('./pages/admin/ExpenseCategories'));
+const RoleManagement = lazy(() => import('./pages/admin/RoleManagement'));
+const CommunicationTemplates = lazy(() => import('./pages/admin/CommunicationTemplates'));
+const EmailSettings = lazy(() => import('./pages/admin/EmailSettings'));
+const DataOptimization = lazy(() => import('./pages/admin/DataOptimization'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage'));
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 import { useCompanyBranding } from '@/hooks/useCompanyBranding';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { CompanyLogoMark } from '@/components/shared/CompanyLogoMark';
@@ -96,7 +89,8 @@ const AuthenticatedApp = () => {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
-    <Routes>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/employees" element={<Employees />} />
@@ -131,7 +125,8 @@ const AuthenticatedApp = () => {
         <Route path="/admin/data-optimization" element={<DataOptimization />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 };
 
@@ -142,12 +137,14 @@ function App() {
         <GlobalActionProgressBar />
         <AppThemeSync />
         <Router>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/accept-invite" element={<AcceptInvitePage />} />
-            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/*" element={<AuthenticatedApp />} />
-          </Routes>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/accept-invite" element={<AcceptInvitePage />} />
+              <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/*" element={<AuthenticatedApp />} />
+            </Routes>
+          </Suspense>
         </Router>
         <Toaster />
         <SonnerToaster position="top-right" richColors closeButton duration={3000} />

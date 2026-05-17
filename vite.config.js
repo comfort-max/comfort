@@ -17,6 +17,8 @@ export default defineConfig({
           if (!id.includes('node_modules')) return;
           if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf-utils';
           if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('recharts') || id.includes('d3-')) return 'recharts';
+          if (id.includes('xlsx')) return 'xlsx';
           // Let Rollup auto-group remaining dependencies to avoid
           // circular references between forced manual chunks.
           return;
