@@ -58,19 +58,10 @@ export function clearAuthCallbackFromUrl() {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
-/** Apply PKCE code or implicit OAuth tokens from the current URL. */
+/** Apply implicit OAuth hash tokens (PKCE is handled on /auth/callback). */
 export async function completeAuthCallbackFromUrl(supabase) {
   const callback = getAuthCallbackFromUrl();
   if (!callback) return { error: null };
-
-  if (callback.kind === "pkce") {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(callback.code);
-    if (!error) clearAuthCallbackFromUrl();
-    if (!error && data?.session?.user && hasOnlyOAuthIdentities(data.session.user)) {
-      return { error: null, oauthOnly: true };
-    }
-    return { error };
-  }
 
   if (callback.kind === "oauth") {
     const { error } = await supabase.auth.setSession({

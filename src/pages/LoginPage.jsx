@@ -20,6 +20,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LOGIN_OAUTH_PROVIDERS, SOCIAL_LOGIN_NAMES } from "@/lib/oauthProviders";
 import { isPendingAuthCallbackUrl, isRecoveryCallbackUrl } from "@/lib/authCallback";
+import { consumeAuthErrorMessage } from "@/pages/auth/AuthCallbackPage";
 import { GoogleIcon, YahooIcon } from "@/components/icons/OAuthBrandIcons";
 
 const RESET_EMAIL_COOLDOWN_MS = 90_000;
@@ -51,6 +52,13 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSending, setForgotSending] = useState(false);
   const resetInFlight = useRef(false);
+
+  React.useEffect(() => {
+    const authError = consumeAuthErrorMessage();
+    if (authError) {
+      toast.error(authError);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (isRecoveryCallbackUrl()) {
@@ -143,7 +151,7 @@ export default function LoginPage() {
   const oauth = async (provider, loadingKey) => {
     setOauthLoading(loadingKey || provider);
     try {
-      const redirectTo = `${window.location.origin}/login`;
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo, skipBrowserRedirect: false },
@@ -153,7 +161,7 @@ export default function LoginPage() {
       const msg = err?.message || String(err);
       if (/not enabled|Unsupported provider|validation_failed/i.test(msg)) {
         toast.error(
-          "Social sign-in is not configured. In Supabase: enable Google under Providers, add Yahoo as a custom OIDC provider (custom:yahoo), and add your site URL under Redirect URLs."
+          `Social sign-in is not configured. In Supabase: enable Google under Providers, add Yahoo as a custom OIDC provider (custom:yahoo), and add ${window.location.origin}/auth/callback under Redirect URLs.`
         );
       } else {
         const label =

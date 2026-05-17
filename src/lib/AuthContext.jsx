@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
-import { completeAuthCallbackFromUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
+import { completeAuthCallbackFromUrl, getAuthCallbackFromUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
 
 const AuthContext = createContext(null);
 
@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authUser, setAuthUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const authReadyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -15,8 +16,21 @@ export function AuthProvider({ children }) {
     async function bootstrapAuth() {
       try {
         const path = typeof window !== "undefined" ? window.location.pathname : "";
+
+        if (path === "/auth/callback") {
+          return;
+        }
+
+        const callback = getAuthCallbackFromUrl();
+        if (callback?.kind === "pkce") {
+          const search = window.location.search || "";
+          const hash = window.location.hash || "";
+          window.location.replace(`/auth/callback${search}${hash}`);
+          return;
+        }
+
         const isResetRoute = path === "/auth/reset-password" || path === "/auth/accept-invite";
-        if (!isResetRoute) {
+        if (!isResetRoute && callback?.kind === "oauth") {
           const { error } = await completeAuthCallbackFromUrl(supabase);
           if (error && !cancelled) {
             console.warn("Auth callback failed:", error.message);
@@ -36,12 +50,16 @@ export function AuthProvider({ children }) {
           console.warn("Auth bootstrap failed:", err);
           setIsLoadingAuth(false);
         }
+      } finally {
+        authReadyRef.current = true;
       }
     }
 
     bootstrapAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+
       if (event === "PASSWORD_RECOVERY" && session?.user) {
         const path = typeof window !== "undefined" ? window.location.pathname : "";
         if (path !== "/auth/reset-password" && isRecoveryCallbackUrl()) {
@@ -51,14 +69,22 @@ export function AuthProvider({ children }) {
           return;
         }
       }
+
       if (session?.user) {
         setAuthUser(session.user);
-        loadProfile(session.user);
-      } else {
-        setAuthUser(null);
-        setUser(null);
-        setIsLoadingAuth(false);
+        if (authReadyRef.current) {
+          loadProfile(session.user);
+        }
+        return;
       }
+
+      if (!authReadyRef.current || event === "INITIAL_SESSION") {
+        return;
+      }
+
+      setAuthUser(null);
+      setUser(null);
+      setIsLoadingAuth(false);
     });
 
     return () => {
@@ -102,7 +128,6 @@ export function AuthProvider({ children }) {
 
     const profileRole = data.role != null ? String(data.role).trim() : '';
     const metaRoleTrim = metaRole != null ? String(metaRole).trim() : '';
-    // Invites put the real role in JWT metadata; profiles may still say "user" until synced.
     const role =
       metaRoleTrim && (!profileRole || profileRole.toLowerCase() === 'user')
         ? metaRoleTrim

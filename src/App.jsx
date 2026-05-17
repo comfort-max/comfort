@@ -44,6 +44,7 @@ const DataOptimization = lazy(() => import('./pages/admin/DataOptimization'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'));
 import { useCompanyBranding } from '@/hooks/useCompanyBranding';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { CompanyLogoMark } from '@/components/shared/CompanyLogoMark';
@@ -136,6 +137,7 @@ function App() {
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/auth/accept-invite" element={<AcceptInvitePage />} />
               <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
               <Route path="/*" element={<AuthenticatedApp />} />
