@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import inviteHandler from "../api/admin/invite.js";
 import deleteUserHandler from "../api/admin/delete-user.js";
 import updateUserHandler from "../api/admin/update-user.js";
+import approveInvitationHandler from "../api/admin/approve-invitation.js";
 import pwaIconHandler from "../api/pwa-icon.js";
 import pwaManifestHandler from "../api/pwa-manifest.js";
 import faviconHandler from "../api/favicon.js";
@@ -103,6 +104,7 @@ app.get("/api/email/health", (req, res) => {
 app.post("/api/admin/invite", (req, res) => inviteHandler(req, res));
 app.post("/api/admin/delete-user", (req, res) => deleteUserHandler(req, res));
 app.post("/api/admin/update-user", (req, res) => updateUserHandler(req, res));
+app.post("/api/admin/approve-invitation", (req, res) => approveInvitationHandler(req, res));
 app.get("/api/pwa-icon", (req, res) => pwaIconHandler(req, res));
 app.get("/api/favicon", (req, res) => faviconHandler(req, res));
 app.get("/api/pwa-manifest", (req, res) => pwaManifestHandler(req, res));

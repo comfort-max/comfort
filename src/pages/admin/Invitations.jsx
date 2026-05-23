@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { db, sendAdminInvite } from "@/services/SupabaseService";
+import { db, sendAdminInvite, approveAdminInvitation } from "@/services/SupabaseService";
 import { listInvitations } from "@/lib/listInvitations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
@@ -10,7 +10,7 @@ import ConfirmModal from "@/components/shared/ConfirmModal";
 import ProgressModal from "@/components/shared/ProgressModal";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, XCircle, Eye, ListChecks, Download, Trash2 } from "lucide-react";
+import { RefreshCw, XCircle, Eye, ListChecks, Download, Trash2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import EmailPreviewDialog from "@/components/shared/EmailPreviewDialog";
 import { buildInviteEmailContent } from "@/lib/inviteEmail";
@@ -28,6 +28,7 @@ export default function Invitations() {
   const [emailPreview, setEmailPreview] = useState(null);
   const [statusTab, setStatusTab] = useState("pending");
   const [confirmTrash, setConfirmTrash] = useState(null);
+  const [confirmApprove, setConfirmApprove] = useState(null);
   const [progress, setProgress] = useState({ open: false, current: 0, total: 0 });
 
   const { data: invitations = [], isLoading, isError, error } = useQuery({
@@ -80,6 +81,27 @@ export default function Invitations() {
       setSelectedIds([]);
       toast.success("Invitation(s) cancelled");
     },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (ids) => {
+      const items = invitations.filter((i) => ids.includes(i.id));
+      const nonPending = items.filter((i) => normalizeInvitationStatus(i.status) !== "pending");
+      if (nonPending.length) {
+        throw new Error("Only pending invitations can be approved. Adjust your selection.");
+      }
+      for (const inv of items) {
+        await approveAdminInvitation(inv.id);
+      }
+    },
+    onSuccess: () => {
+      setSelectedIds([]);
+      setConfirmApprove(null);
+      toast.success("User(s) added — they can sign in with their assigned role");
+      qc.invalidateQueries({ queryKey: ["invitations"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e) => toast.error(e?.message || "Approve failed"),
   });
 
   const resendMutation = useMutation({
@@ -154,6 +176,25 @@ export default function Invitations() {
     { key: "status", header: "Status", render: (r) => <StatusBadge status={normalizeInvitationStatus(r.status)} /> },
     { key: "invited_by", header: "Invited By", accessor: "invited_by" },
     { key: "created_date", header: "Date", render: (r) => r.created_date?.slice(0, 10) },
+    {
+      key: "actions",
+      header: "",
+      render: (r) =>
+        canManageInvitations && normalizeInvitationStatus(r.status) === "pending" ? (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1"
+              title="Add user now without waiting for them to accept"
+              disabled={approveMutation.isPending}
+              onClick={() => setConfirmApprove({ ids: [r.id], single: r })}
+            >
+              <UserCheck className="w-4 h-4" /> Approve
+            </Button>
+          </div>
+        ) : null,
+    },
   ];
 
   const previewSample = (inv) => {
@@ -173,7 +214,7 @@ export default function Invitations() {
 
   return (
     <div>
-      <PageHeader title="Invitations" subtitle="Pending invites, resend, and bulk actions" permissionResource="admin_invitations">
+      <PageHeader title="Invitations" subtitle="Pending invites, approve manually, resend, and bulk actions" permissionResource="admin_invitations">
         <Button variant="outline" size="sm" className="gap-1" asChild>
           <Link to="/install" target="_blank" rel="noreferrer">
             <Download className="w-3.5 h-3.5" /> Install instructions
@@ -201,6 +242,15 @@ export default function Invitations() {
               disabled={resendMutation.isPending || !canManageInvitations}
             >
               <RefreshCw className="w-3.5 h-3.5" /> Resend ({selectedIds.length})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setConfirmApprove({ ids: selectedIds })}
+              disabled={approveMutation.isPending || !canManageInvitations}
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Approve & add user ({selectedIds.length})
             </Button>
             <Button
               variant="outline"
@@ -281,6 +331,20 @@ export default function Invitations() {
         confirmText="Move to Trash"
         destructive
         loading={softDelete.isPending}
+      />
+
+      <ConfirmModal
+        open={!!confirmApprove}
+        onClose={() => !approveMutation.isPending && setConfirmApprove(null)}
+        onConfirm={() => approveMutation.mutate(confirmApprove?.ids || [])}
+        title="Approve and add user?"
+        description={
+          confirmApprove?.single
+            ? `Add ${confirmApprove.single.invited_name || confirmApprove.single.email} as ${confirmApprove.single.role || "user"} without waiting for them to accept the invitation? They will appear in User Management and can sign in.`
+            : `Add ${confirmApprove?.ids?.length || 0} invited user(s) now without waiting for them to accept? They will appear in User Management and can sign in.`
+        }
+        confirmText="Approve & add user"
+        loading={approveMutation.isPending}
       />
 
       <ProgressModal open={progress.open} title="Moving to Trash…" current={progress.current} total={progress.total} />

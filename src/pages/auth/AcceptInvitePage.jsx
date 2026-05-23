@@ -57,7 +57,7 @@ export default function AcceptInvitePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      const claim = await claimInvitationProfile();
+      const claim = await claimInvitationProfile({ acceptInvite: true });
       if (claim?.ok === false && !claim?.skipped) {
         console.warn("claim_invitation_for_user:", claim?.error || "failed");
       }

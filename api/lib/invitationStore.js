@@ -95,3 +95,94 @@ export async function clearPendingInvitationsForEmail(admin, email) {
     }
   }
 }
+
+async function findAuthUserByEmail(admin, email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+
+  let page = 1;
+  const perPage = 200;
+  while (page <= 25) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error(error.message || "Could not list auth users");
+    const match = (data?.users || []).find(
+      (u) => String(u.email || "").trim().toLowerCase() === normalized
+    );
+    if (match) return match;
+    if (!data?.users?.length || data.users.length < perPage) break;
+    page += 1;
+  }
+  return null;
+}
+
+async function markInvitationAccepted(admin, invitationId, email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  let lastError = null;
+
+  for (const table of INVITE_TABLES) {
+    if (invitationId) {
+      const { error } = await admin.from(table).update({ status: "accepted" }).eq("id", invitationId);
+      if (!error) return;
+      lastError = error;
+      if (!isMissingRelationError(error)) break;
+      continue;
+    }
+    if (normalized) {
+      const { error } = await admin
+        .from(table)
+        .update({ status: "accepted" })
+        .eq("email", normalized)
+        .eq("status", "pending");
+      if (!error) return;
+      lastError = error;
+      if (!isMissingRelationError(error)) break;
+    }
+  }
+
+  if (lastError && !isMissingRelationError(lastError)) {
+    throw new Error(lastError.message || "Could not mark invitation accepted");
+  }
+}
+
+/**
+ * Admin manual approval: create profile, sync auth metadata, mark invitation accepted.
+ * @param {import("@supabase/supabase-js").SupabaseClient} admin
+ * @param {{ id?: string, email: string, role?: string, invited_name?: string | null }} invitation
+ */
+export async function approvePendingInvitation(admin, invitation) {
+  const email = String(invitation.email || "").trim().toLowerCase();
+  if (!email) throw new Error("Invitation email is required");
+
+  const role = String(invitation.role || "user").trim() || "user";
+  const fullName = String(invitation.invited_name || email.split("@")[0] || "").trim() || email.split("@")[0];
+
+  const authUser = await findAuthUserByEmail(admin, email);
+  if (!authUser?.id) {
+    throw new Error(
+      "No login account exists for this email yet. Resend the invitation so Supabase creates the account, then approve again."
+    );
+  }
+
+  const { data: profile, error: profileErr } = await admin
+    .from("profiles")
+    .upsert(
+      {
+        id: authUser.id,
+        email,
+        full_name: fullName,
+        role,
+      },
+      { onConflict: "id" }
+    )
+    .select()
+    .single();
+
+  if (profileErr || !profile) {
+    throw new Error(profileErr?.message || "Could not create user profile");
+  }
+
+  await syncUserAuthRole(admin, authUser.id, { role, fullName });
+  await markInvitationAccepted(admin, invitation.id, email);
+
+  return profile;
+}

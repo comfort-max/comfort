@@ -451,6 +451,25 @@ export async function updateAdminUser(payload) {
   return json.profile;
 }
 
+/** Manually approve a pending invitation and add the user without waiting for accept. */
+export async function approveAdminInvitation(invitationId) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in");
+  if (!invitationId) throw new Error("invitation_id is required");
+
+  const res = await fetch("/api/admin/approve-invitation", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ invitation_id: invitationId }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Approve invitation failed");
+  return json;
+}
+
 /** Admin-only: permanently delete a user (auth account + profile). */
 export async function deleteAdminUser(userId) {
   const { data: { session } } = await supabase.auth.getSession();

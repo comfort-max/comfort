@@ -60,9 +60,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "user_id is required" });
   }
 
-  if (userId === ctx.user.id) {
-    return res.status(400).json({ error: "You cannot delete your own account" });
-  }
+  const isSelfDelete = userId === ctx.user.id;
 
   try {
     const { data: target, error: tErr } = await ctx.admin
@@ -75,10 +73,20 @@ export default async function handler(req, res) {
     }
 
     const targetRole = String(target.role || "").toLowerCase();
-    if (targetRole === "admin") {
-      const { data: profiles, error: listErr } = await ctx.admin.from("profiles").select("id, role");
-      if (listErr) throw listErr;
-      const adminCount = (profiles || []).filter((p) => String(p.role || "").toLowerCase() === "admin").length;
+    const { data: profiles, error: listErr } = await ctx.admin.from("profiles").select("id, role");
+    if (listErr) throw listErr;
+    const adminCount = (profiles || []).filter((p) => String(p.role || "").toLowerCase() === "admin").length;
+
+    if (isSelfDelete) {
+      if (targetRole !== "admin") {
+        return res.status(400).json({ error: "Only administrator accounts can use delete & exit from User Management" });
+      }
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          error: "Cannot delete your account while you are the only administrator. Promote another user to Admin first.",
+        });
+      }
+    } else if (targetRole === "admin") {
       if (adminCount <= 1) {
         return res.status(400).json({ error: "Cannot delete the only administrator" });
       }
@@ -112,6 +120,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
+      selfDeleted: isSelfDelete,
       deleted: {
         id: target.id,
         email: target.email,

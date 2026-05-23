@@ -71,3 +71,36 @@ export async function getUserManagementEditorContext(accessToken) {
 
   return { admin, user };
 }
+
+/** Admin or a role with Invitations → Edit permission. */
+export async function getInvitationEditorContext(accessToken) {
+  const { userClient, admin } = createSupabaseClients(accessToken);
+  const {
+    data: { user },
+    error: userErr,
+  } = await userClient.auth.getUser(accessToken);
+  if (userErr || !user) return null;
+
+  const { data: profile, error: pErr } = await admin.from("profiles").select("role").eq("id", user.id).single();
+  if (pErr || !profile) return null;
+
+  const roleName = String(profile.role || "").trim().toLowerCase();
+  if (roleName === "admin") {
+    return { admin, user };
+  }
+
+  const { data: appRole, error: rErr } = await admin
+    .from("app_roles")
+    .select("permissions")
+    .ilike("name", profile.role)
+    .maybeSingle();
+
+  if (rErr || !appRole) return null;
+
+  const perms = appRole.permissions || {};
+  const canEdit =
+    perms?.admin_invitations?.edit === true || perms?.admin_invitations?.edit === "true";
+  if (!canEdit) return null;
+
+  return { admin, user };
+}

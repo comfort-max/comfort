@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { db, sendAdminInvite, deleteAdminUser, updateAdminUser } from "@/services/SupabaseService";
+import { listInvitations } from "@/lib/listInvitations";
+import { filterActiveUsers } from "@/lib/activeUsers";
 import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
@@ -11,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, UserPlus, Shield, Bell, Trash2 } from "lucide-react";
+import { Pencil, UserPlus, Shield, Bell, Trash2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmModal from "@/components/shared/ConfirmModal";
 import { useAuth } from "@/lib/AuthContext";
@@ -25,7 +27,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 export default function UserManagement() {
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { can, isAdmin } = usePermissions();
   const canInviteUsers = can("admin_users", "invite");
   const canEditUsers = can("admin_users", "edit");
@@ -54,6 +56,23 @@ export default function UserManagement() {
   });
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ["users"], queryFn: () => db.profiles.list() });
+  const { data: invitations = [] } = useQuery({
+    queryKey: ["invitations"],
+    queryFn: listInvitations,
+    staleTime: 30 * 1000,
+  });
+
+  const activeUsers = useMemo(() => filterActiveUsers(users, invitations), [users, invitations]);
+
+  const adminCount = useMemo(
+    () => users.filter((u) => String(u.role || "").toLowerCase() === "admin").length,
+    [users]
+  );
+  const canDeleteOwnAccount = isAdmin && adminCount > 1;
+  const ownAccountRow = useMemo(
+    () => (user?.id ? activeUsers.find((u) => u.id === user.id) : null),
+    [activeUsers, user?.id]
+  );
 
   const { data: pendingAccessRequests = [] } = useQuery({
     queryKey: ["user-access-requests", "pending"],
@@ -182,14 +201,14 @@ export default function UserManagement() {
   useEffect(() => {
     const userId = searchParams.get("userId");
     if (!userId || isLoading || !canEditUsers) return;
-    const match = users.find((u) => u.id === userId);
+    const match = activeUsers.find((u) => u.id === userId);
     if (match) {
       openEditUser(match);
       const next = new URLSearchParams(searchParams);
       next.delete("userId");
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, users, isLoading, canEditUsers]);
+  }, [searchParams, activeUsers, isLoading, canEditUsers]);
 
   const updateUserMutation = useMutation({
     mutationFn: async (data) => {
@@ -226,7 +245,13 @@ export default function UserManagement() {
 
   const deleteUserMutation = useMutation({
     mutationFn: (userId) => deleteAdminUser(userId),
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      if (result?.selfDeleted) {
+        setConfirmDeleteUser(null);
+        setShowEdit(false);
+        await logout();
+        return;
+      }
       setConfirmDeleteUser(null);
       setShowEdit(false);
       toast.success("User deleted");
@@ -235,6 +260,20 @@ export default function UserManagement() {
     },
     onError: (err) => toast.error(err?.message || "Failed to delete user"),
   });
+
+  const openDeleteOwnAccount = () => {
+    if (!canDeleteOwnAccount) {
+      toast.error("Promote another user to Admin before deleting your account.");
+      return;
+    }
+    const row = ownAccountRow || {
+      id: user?.id,
+      email: user?.email,
+      full_name: user?.full_name,
+      role: user?.role,
+    };
+    if (row?.id) setConfirmDeleteUser({ ...row, selfDelete: true });
+  };
 
   const saveRolePermissionsMutation = useMutation({
     mutationFn: async () => {
@@ -322,6 +361,22 @@ export default function UserManagement() {
   return (
     <div>
       <PageHeader title="User Management" subtitle="Invite users, assign roles, and edit permissions per role" permissionResource="admin_users">
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-destructive hover:text-destructive"
+            onClick={openDeleteOwnAccount}
+            disabled={deleteUserMutation.isPending}
+            title={
+              canDeleteOwnAccount
+                ? "Permanently delete your account and sign out"
+                : "Add another administrator before you can delete your account"
+            }
+          >
+            <LogOut className="w-4 h-4" /> Delete my account & exit
+          </Button>
+        )}
         {canInviteUsers && (
         <Button size="sm" className="gap-1" onClick={() => setShowInvite(true)}>
           <UserPlus className="w-4 h-4" /> Invite user
@@ -361,7 +416,7 @@ export default function UserManagement() {
         </div>
       )}
 
-      <DataTable columns={columns} data={users} loading={isLoading} searchPlaceholder="Search users..." />
+      <DataTable columns={columns} data={activeUsers} loading={isLoading} searchPlaceholder="Search users..." />
 
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-md">
@@ -524,16 +579,29 @@ export default function UserManagement() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEdit(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => updateUserMutation.mutate(editForm)}
-              disabled={updateUserMutation.isPending || !editForm.id}
-            >
-              {updateUserMutation.isPending ? "Saving…" : "Save"}
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            {isAdmin && editForm.id === user?.id && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-1 text-destructive hover:text-destructive"
+                disabled={deleteUserMutation.isPending}
+                onClick={openDeleteOwnAccount}
+              >
+                <LogOut className="w-4 h-4" /> Delete my account & exit
+              </Button>
+            )}
+            <div className="flex w-full justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowEdit(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => updateUserMutation.mutate(editForm)}
+                disabled={updateUserMutation.isPending || !editForm.id}
+              >
+                {updateUserMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -571,13 +639,15 @@ export default function UserManagement() {
         onConfirm={() => {
           if (confirmDeleteUser?.id) deleteUserMutation.mutate(confirmDeleteUser.id);
         }}
-        title="Delete user?"
+        title={confirmDeleteUser?.selfDelete ? "Delete your account & exit?" : "Delete user?"}
         description={
-          confirmDeleteUser
-            ? `Permanently delete ${confirmDeleteUser.full_name || confirmDeleteUser.email || "this user"}? Their login will be removed and they will no longer be able to sign in. This cannot be undone.`
-            : ""
+          confirmDeleteUser?.selfDelete
+            ? "Permanently delete your administrator account and sign out? You will lose access to COMFORT and cannot undo this. Another administrator must remain active."
+            : confirmDeleteUser
+              ? `Permanently delete ${confirmDeleteUser.full_name || confirmDeleteUser.email || "this user"}? Their login will be removed and they will no longer be able to sign in. This cannot be undone.`
+              : ""
         }
-        confirmText="Delete user"
+        confirmText={confirmDeleteUser?.selfDelete ? "Delete my account & exit" : "Delete user"}
         destructive
         loading={deleteUserMutation.isPending}
       />
