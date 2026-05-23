@@ -8,6 +8,7 @@ import {
   pkceVerifierMissingMessage,
 } from "@/lib/authCallback";
 import { claimInvitationProfile } from "@/lib/applyInviteProfile";
+import { shouldClaimInvitationProfile } from "@/lib/inviteClaim";
 import { Loader2 } from "lucide-react";
 
 const AUTH_ERROR_KEY = "comfort_auth_error";
@@ -21,6 +22,22 @@ export function consumeAuthErrorMessage() {
 function redirectToLogin(message) {
   if (message) sessionStorage.setItem(AUTH_ERROR_KEY, message);
   window.location.replace("/login");
+}
+
+async function claimInvitationIfNeeded() {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  let profile = null;
+  if (authUser?.id) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", authUser.id)
+      .maybeSingle();
+    profile = data ?? null;
+  }
+  if (shouldClaimInvitationProfile(authUser, profile)) {
+    await claimInvitationProfile().catch(() => {});
+  }
 }
 
 function oauthGuardKey(code) {
@@ -82,7 +99,7 @@ export default function AuthCallbackPage() {
 
           sessionStorage.setItem(guardKey, "done");
           clearAuthCallbackFromUrl();
-          await claimInvitationProfile().catch(() => {});
+          await claimInvitationIfNeeded();
           window.location.replace("/");
           return;
         }
@@ -94,7 +111,7 @@ export default function AuthCallbackPage() {
           });
           if (error) throw error;
           clearAuthCallbackFromUrl();
-          await claimInvitationProfile().catch(() => {});
+          await claimInvitationIfNeeded();
           window.location.replace("/");
           return;
         }

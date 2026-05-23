@@ -10,7 +10,7 @@ export async function claimInvitationProfile() {
     throw error;
   }
   const result = data || { ok: false };
-  if (result?.ok) {
+  if (result?.ok && !result?.skipped) {
     await supabase.auth.updateUser({
       data: { role: result.role, full_name: result.full_name, invite_pending: false },
     });

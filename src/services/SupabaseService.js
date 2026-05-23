@@ -426,6 +426,31 @@ export async function sendAdminInvite(payload) {
   return json;
 }
 
+/** Update a user profile and sync auth metadata (admin / User Management editors). */
+export async function updateAdminUser(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in");
+  if (!payload?.id) throw new Error("user id is required");
+
+  const res = await fetch("/api/admin/update-user", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      user_id: payload.id,
+      full_name: payload.full_name,
+      role: payload.role,
+      phone: payload.phone,
+      email: payload.email,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Update user failed");
+  return json.profile;
+}
+
 /** Admin-only: permanently delete a user (auth account + profile). */
 export async function deleteAdminUser(userId) {
   const { data: { session } } = await supabase.auth.getSession();

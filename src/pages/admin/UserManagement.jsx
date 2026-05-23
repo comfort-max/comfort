@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { db, sendAdminInvite, deleteAdminUser } from "@/services/SupabaseService";
+import { db, sendAdminInvite, deleteAdminUser, updateAdminUser } from "@/services/SupabaseService";
 import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/shared/PageHeader";
@@ -193,14 +193,16 @@ export default function UserManagement() {
 
   const updateUserMutation = useMutation({
     mutationFn: async (data) => {
-      const updates = {
+      const payload = {
+        id: data.id,
         full_name: data.full_name?.trim() || null,
         role: data.role || "user",
       };
       if (Object.prototype.hasOwnProperty.call(data, "phone")) {
-        updates.phone = data.phone?.trim() || null;
+        payload.phone = data.phone?.trim() || null;
       }
-      return db.profiles.update(data.id, updates);
+      if (data.email) payload.email = data.email;
+      return updateAdminUser(payload);
     },
     onSuccess: async (_, variables) => {
       setShowEdit(false);

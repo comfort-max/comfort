@@ -67,3 +67,31 @@ export async function syncInvitedAuthMetadata(admin, userId, { role, fullName, e
   // Remove premature profile row if another trigger created one.
   await admin.from("profiles").delete().eq("id", userId);
 }
+
+/** After an admin assigns a role in User Management, keep auth metadata aligned. */
+export async function syncUserAuthRole(admin, userId, { role, fullName }) {
+  if (!userId) return;
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      role: role || "user",
+      full_name: fullName || "",
+      invite_pending: false,
+    },
+  });
+  if (error) {
+    throw new Error(error.message || "Could not sync auth user metadata");
+  }
+}
+
+/** Remove stale pending invitations so login claim cannot revert the role. */
+export async function clearPendingInvitationsForEmail(admin, email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return;
+
+  for (const table of INVITE_TABLES) {
+    const { error } = await admin.from(table).delete().eq("email", normalized).eq("status", "pending");
+    if (error && !isMissingRelationError(error)) {
+      console.warn(`clearPendingInvitationsForEmail (${table}):`, error.message);
+    }
+  }
+}

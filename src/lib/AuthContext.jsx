@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { supabase } from '@/api/supabaseClient';
 import { completeAuthCallbackFromUrl, getAuthCallbackFromUrl, isRecoveryCallbackUrl } from '@/lib/authCallback';
 import { claimInvitationProfile } from '@/lib/applyInviteProfile';
+import { shouldClaimInvitationProfile } from '@/lib/inviteClaim';
 
 const AuthContext = createContext(null);
 
@@ -117,10 +118,12 @@ export function AuthProvider({ children }) {
     }
 
     if (!data) {
-      const claim = await claimInvitationProfile().catch(() => ({ skipped: true }));
-      if (claim?.ok) {
-        await loadProfile(sessionUser);
-        return;
+      if (shouldClaimInvitationProfile(sessionUser, null)) {
+        const claim = await claimInvitationProfile().catch(() => ({ skipped: true }));
+        if (claim?.ok && !claim?.skipped) {
+          await loadProfile(sessionUser);
+          return;
+        }
       }
       setUser({
         id: sessionUser.id,
@@ -133,14 +136,14 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const profileRole = data.role != null ? String(data.role).trim() : '';
-    if (profileRole.toLowerCase() === 'user') {
+    if (shouldClaimInvitationProfile(sessionUser, data)) {
       const claim = await claimInvitationProfile().catch(() => ({ skipped: true }));
-      if (claim?.ok && claim.role && String(claim.role).toLowerCase() !== 'user') {
+      if (claim?.ok && !claim?.skipped && claim.role && String(claim.role).toLowerCase() !== 'user') {
         await loadProfile(sessionUser);
         return;
       }
     }
+    const profileRole = data.role != null ? String(data.role).trim() : '';
     const metaRoleTrim = metaRole != null ? String(metaRole).trim() : '';
     const role =
       metaRoleTrim && (!profileRole || profileRole.toLowerCase() === 'user')
